@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import argparse
 
+from dotenv import load_dotenv
+
+load_dotenv()  # so TAVILY_API_KEY etc. can live in a local .env file
+
 from agents.llm import has_api_key
 from graph.workflow import build_workflow
 
