@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agents.llm import get_llm
+from agents.llm import get_llm, message_text
 from models.task import Task, TaskStatus
 from optimization.budget import TokenBudget
 
@@ -34,4 +34,4 @@ def synthesize(
     )
     if budget is not None:
         budget.record("synthesizer", out)
-    return out.content if hasattr(out, "content") else str(out)
+    return message_text(out)

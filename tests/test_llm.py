@@ -68,3 +68,34 @@ def test_openai_compatible_providers_set_request_timeout(monkeypatch):
         monkeypatch.setenv(env_key, "fake")
         llm = llm_mod.get_llm()
         assert llm.request_timeout == 90, env_key
+
+
+def test_cerebras_selection_and_timeout(monkeypatch):
+    for var in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setenv("CEREBRAS_API_KEY", "fake")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert llm_mod._active_provider() == "cerebras"
+    assert llm_mod.has_api_key() is True
+    llm = llm_mod.get_llm()
+    assert llm.request_timeout == 90
+
+
+def test_message_text_handles_block_content():
+    """Google-style providers return content as a list of blocks, not a string."""
+
+    class _BlockMsg:
+        content = [
+            {"type": "text", "text": "Vapor chamber reduces hotspot temps "},
+            {"type": "text", "text": "by 5-10C."},
+        ]
+
+    class _StrMsg:
+        content = "plain string"
+
+    assert llm_mod.message_text(_BlockMsg()) == "Vapor chamber reduces hotspot temps by 5-10C."
+    assert llm_mod.message_text(_StrMsg()) == "plain string"
+    assert llm_mod.message_text("raw") == "raw"

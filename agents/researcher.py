@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from agents.llm import get_llm
+from agents.llm import get_llm, message_text
 from models.task import Task
 from optimization.budget import TokenBudget
 from rag.retriever import rag_search
@@ -52,7 +52,7 @@ def research_task(
     )
     if budget is not None:
         budget.record("researcher", notes)
-    task.result = notes.content if hasattr(notes, "content") else str(notes)
+    task.result = message_text(notes)
     task.evidence = [h["url"] for h in web_hits if h.get("url")]
     task.evidence += [f"kb:{h['id']}" for h in rag_hits]
     return task

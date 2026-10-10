@@ -5,11 +5,14 @@ import os
 
 def _active_provider() -> str | None:
     # Google first when it works (generous free tier), then Groq (free, no card),
-    # then OpenRouter (free :free models), then OpenAI (paid).
+    # then Cerebras (free, no card), then OpenRouter (free :free models),
+    # then OpenAI (paid).
     if os.getenv("GOOGLE_API_KEY"):
         return "google"
     if os.getenv("GROQ_API_KEY"):
         return "groq"
+    if os.getenv("CEREBRAS_API_KEY"):
+        return "cerebras"
     if os.getenv("OPENROUTER_API_KEY"):
         return "openrouter"
     if os.getenv("OPENAI_API_KEY"):
@@ -37,13 +40,24 @@ def get_llm():
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         return ChatGoogleGenerativeAI(
-            model=os.getenv("MODEL", "gemini-2.0-flash"), temperature=0.2
+            model=os.getenv("MODEL", "gemini-3.8-flash"), temperature=0.2
         )
     if provider == "groq":
         from langchain_groq import ChatGroq
 
         return ChatGroq(
             model=os.getenv("MODEL", "llama-3.3-70b-versatile"),
+            temperature=0.2,
+            request_timeout=90,
+        )
+    if provider == "cerebras":
+        from langchain_openai import ChatOpenAI
+
+        # Cerebras: free tier, OpenAI-compatible API — https://cloud.cerebras.ai
+        return ChatOpenAI(
+            model=os.getenv("CEREBRAS_MODEL", "llama-3.3-70b"),
+            api_key=os.getenv("CEREBRAS_API_KEY"),
+            base_url="https://api.cerebras.ai/v1",
             temperature=0.2,
             request_timeout=90,
         )
@@ -74,3 +88,26 @@ def get_llm():
             request_timeout=90,
         )
     return None
+
+
+def message_text(response) -> str:
+    """Extract plain text from a LangChain chat response.
+
+    Google-style providers may return ``content`` as a list of blocks
+    instead of a plain string — normalize both shapes so downstream
+    code (claim splitting, report building) always gets text.
+    """
+    content = getattr(response, "content", response)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                parts.append(str(block.get("text", "")))
+            else:
+                parts.append(str(getattr(block, "text", block)))
+        return "".join(parts)
+    return str(content)

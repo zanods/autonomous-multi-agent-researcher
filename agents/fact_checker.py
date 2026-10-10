@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from agents.llm import get_llm
+from agents.llm import get_llm, message_text
 from models.task import Task
 from optimization.budget import TokenBudget
 from optimization.claims import exact_match_verify, split_claims
@@ -43,8 +43,7 @@ def _verify_whole(
     )
     if budget is not None:
         budget.record("fact_checker", verdict)
-    text = verdict.content if hasattr(verdict, "content") else str(verdict)
-    text = text.strip()
+    text = message_text(verdict).strip()
     return text.upper().startswith("PASS"), text[:200]
 
 
@@ -74,7 +73,7 @@ def _verify_staged(
         out = llm.invoke(prompt)
         if budget is not None:
             budget.record("fact_checker", out)
-        text = out.content if hasattr(out, "content") else str(out)
+        text = message_text(out)
         for i, line in enumerate(text.strip().splitlines()):
             target = need_llm[i] if i < len(need_llm) else line
             (llm_ok if "PASS" in line.upper() else llm_bad).append(target)

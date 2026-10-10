@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from agents.llm import get_llm
+from agents.llm import get_llm, message_text
 from models.task import Task
 from optimization.budget import TokenBudget
 
@@ -70,7 +70,7 @@ def _plan_via_json(
     )
     if budget is not None:
         budget.record("planner", out)
-    text = out.content if hasattr(out, "content") else str(out)
+    text = message_text(out)
     m = re.search(r"\{.*\}", text, re.S)
     try:
         data = json.loads(m.group(0)) if m else {"tasks": []}

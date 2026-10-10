@@ -6,9 +6,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     google_api_key: str = ""
     groq_api_key: str = ""
+    cerebras_api_key: str = ""
     openrouter_api_key: str = ""
     openai_api_key: str = ""
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-3.8-flash"
     embedding_model: str = "text-embedding-3-small"
     tavily_api_key: str = ""
     cohere_api_key: str = ""
