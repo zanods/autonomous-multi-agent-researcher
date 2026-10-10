@@ -4,9 +4,14 @@ import os
 
 
 def _active_provider() -> str | None:
-    # Gemini first: it has a free tier, good enough for testing live mode.
+    # Google first when it works (generous free tier), then Groq (free, no card),
+    # then OpenRouter (free :free models), then OpenAI (paid).
     if os.getenv("GOOGLE_API_KEY"):
         return "google"
+    if os.getenv("GROQ_API_KEY"):
+        return "groq"
+    if os.getenv("OPENROUTER_API_KEY"):
+        return "openrouter"
     if os.getenv("OPENAI_API_KEY"):
         return "openai"
     return None
@@ -28,6 +33,25 @@ def get_llm():
 
         return ChatGoogleGenerativeAI(
             model=os.getenv("MODEL", "gemini-2.0-flash"), temperature=0.2
+        )
+    if provider == "groq":
+        from langchain_groq import ChatGroq
+
+        return ChatGroq(
+            model=os.getenv("MODEL", "llama-3.3-70b-versatile"), temperature=0.2
+        )
+    if provider == "openrouter":
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=os.getenv("MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://github.com/zanods/autonomous-multi-agent-researcher",
+                "X-Title": "autonomous-multi-agent-researcher",
+            },
+            temperature=0.2,
         )
     if provider == "openai":
         from langchain_openai import ChatOpenAI

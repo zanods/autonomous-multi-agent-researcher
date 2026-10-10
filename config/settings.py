@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     google_api_key: str = ""
+    groq_api_key: str = ""
+    openrouter_api_key: str = ""
     openai_api_key: str = ""
     model: str = "gemini-2.0-flash"
     embedding_model: str = "text-embedding-3-small"
