@@ -1,15 +1,39 @@
 from __future__ import annotations
 
+import os
+
 from agents.llm import get_llm
 from models.task import Task
+from optimization.budget import TokenBudget
+from optimization.claims import exact_match_verify, split_claims
+
+OPTIMIZE = os.getenv("OPTIMIZE_TOKENS", "1") == "1"
 
 
-def verify_task(task: Task, mock_mode: bool = True) -> tuple[bool, str]:
-    """Return (passed, note). Mock mode always passes so the graph runs clean."""
-    llm = None if mock_mode else get_llm()
-    if mock_mode or llm is None:
+def verify_task(
+    task: Task,
+    mock_mode: bool = True,
+    optimize: bool = OPTIMIZE,
+    budget: TokenBudget | None = None,
+) -> tuple[bool, str]:
+    """Two-stage fact check when optimize=True:
+
+    1. exact keyword match per claim (0 LLM tokens),
+    2. LLM judges only the claims that failed stage 1, with trimmed evidence.
+
+    Falls back to the classic whole-task prompt when optimize=False.
+    """
+    if mock_mode:
         return True, "mock-verified"
+    llm = get_llm()
+    if llm is None:
+        return True, "mock-verified (no LLM configured)"
+    if optimize:
+        return _verify_staged(task, llm, budget)
+    return _verify_whole(task, llm)
 
+
+def _verify_whole(task: Task, llm) -> tuple[bool, str]:
     verdict = llm.invoke(
         "You are a fact-checker. Given the task and its evidence, reply with exactly "
         "one line: PASS or FAIL, then a short reason.\n"
@@ -18,3 +42,40 @@ def verify_task(task: Task, mock_mode: bool = True) -> tuple[bool, str]:
     text = verdict.content if hasattr(verdict, "content") else str(verdict)
     text = text.strip()
     return text.upper().startswith("PASS"), text[:200]
+
+
+def _verify_staged(
+    task: Task, llm, budget: TokenBudget | None = None
+) -> tuple[bool, str]:
+    claims = split_claims(task.result or "")
+    if not claims:
+        return False, "staged: no verifiable claims extracted"
+    texts = task.evidence_texts or []
+
+    auto_ok, need_llm = [], []
+    for claim in claims:
+        (auto_ok if exact_match_verify(claim, texts) else need_llm).append(claim)
+
+    llm_ok, llm_bad = [], []
+    if need_llm:
+        snippets = "\n".join(f"- {t[:600]}" for t in texts[:3])
+        if budget is not None:
+            snippets = budget.spend("fact_checker", snippets)
+        prompt = (
+            "Fact-check each numbered claim against the evidence snippets below. "
+            "Reply with exactly one line per claim: '<n>. PASS' or '<n>. FAIL'.\n"
+            + "\n".join(f"{i + 1}. {c}" for i, c in enumerate(need_llm))
+            + f"\nEvidence:\n{snippets}"
+        )
+        out = llm.invoke(prompt)
+        text = out.content if hasattr(out, "content") else str(out)
+        for i, line in enumerate(text.strip().splitlines()):
+            target = need_llm[i] if i < len(need_llm) else line
+            (llm_ok if "PASS" in line.upper() else llm_bad).append(target)
+
+    total_ok = len(auto_ok) + len(llm_ok)
+    note = (
+        f"staged: {total_ok}/{len(claims)} claims verified "
+        f"({len(auto_ok)} exact-match, {len(llm_ok)} LLM-verified, {len(llm_bad)} failed)"
+    )
+    return not llm_bad, note

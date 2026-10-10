@@ -8,6 +8,7 @@ from agents.researcher import research_task
 from agents.synthesizer import synthesize
 from graph.state import AgentState
 from models.task import TaskStatus
+from optimization.budget import TokenBudget
 
 
 def _log(state: AgentState, msg: str) -> list[str]:
@@ -27,12 +28,14 @@ def researcher_node(state: AgentState) -> dict:
     )
     if nxt is None:
         return {"run_log": _log(state, "[researcher] nothing to do")}
+    budget = state.get("token_budget") or TokenBudget()
     nxt.transition(TaskStatus.IN_PROGRESS)
-    research_task(nxt, mock_mode=state.get("mock_mode", True))
+    research_task(nxt, mock_mode=state.get("mock_mode", True), budget=budget)
     nxt.transition(TaskStatus.RESEARCHED)
     return {
         "tasks": tasks,
         "current_task_id": nxt.id,
+        "token_budget": budget,
         "run_log": _log(state, f"[researcher] researched: {nxt.title}"),
     }
 
@@ -40,7 +43,9 @@ def researcher_node(state: AgentState) -> dict:
 def fact_checker_node(state: AgentState) -> dict:
     tasks = state["tasks"]
     cur = next(t for t in tasks if t.id == state.get("current_task_id"))
-    ok, note = verify_task(cur, mock_mode=state.get("mock_mode", True))
+    ok, note = verify_task(
+        cur, mock_mode=state.get("mock_mode", True), budget=state.get("token_budget")
+    )
     if ok:
         cur.transition(TaskStatus.VERIFIED)
         cur.transition(TaskStatus.DONE)
@@ -67,7 +72,11 @@ def synthesizer_node(state: AgentState) -> dict:
     report = synthesize(
         state["query"], state["tasks"], mock_mode=state.get("mock_mode", True)
     )
-    return {"report": report, "run_log": _log(state, "[synthesizer] report ready")}
+    budget = state.get("token_budget")
+    msg = "[synthesizer] report ready"
+    if budget is not None and budget.usage:
+        msg += f" | context tokens used: {budget.total_tokens()}"
+    return {"report": report, "run_log": _log(state, msg)}
 
 
 def build_workflow():

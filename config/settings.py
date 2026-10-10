@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     cohere_api_key: str = ""
     chroma_dir: str = "./chroma_db"
+    optimize_tokens: bool = True
 
     class Config:
         env_file = ".env"

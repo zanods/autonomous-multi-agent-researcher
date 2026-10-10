@@ -40,6 +40,11 @@ def main() -> None:
     for line in result["run_log"]:
         print(line)
 
+    budget = result.get("token_budget")
+    if budget is not None and budget.usage:
+        print("\n--- token budget ---")
+        print(budget.report())
+
 
 if __name__ == "__main__":
     main()

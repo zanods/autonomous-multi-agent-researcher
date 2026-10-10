@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TypedDict
 
 from models.task import Task
+from optimization.budget import TokenBudget
 
 
 class AgentState(TypedDict, total=False):
@@ -15,3 +16,4 @@ class AgentState(TypedDict, total=False):
     report: str | None
     run_log: list[str]
     mock_mode: bool
+    token_budget: TokenBudget | None
