@@ -20,12 +20,20 @@ def _keywords(claim: str) -> set[str]:
     return {w for w in words if len(w) > 3 and w not in _STOPWORDS}
 
 
+_NEGATIONS = re.compile(r"\b(no|not|never|without|cannot)\b|n't")
+
+
 def exact_match_verify(claim: str, evidence: list[str]) -> bool:
     """True if every keyword of the claim appears inside a single evidence chunk.
 
     Pure string matching — costs zero LLM tokens. Strict on purpose: anything
     it can't prove goes to stage 2 (LLM review).
+
+    Negated claims never auto-pass: stripping "not" would make
+    "does not support X" look identical to "supports X".
     """
+    if _NEGATIONS.search(claim.lower()):
+        return False
     kws = _keywords(claim)
     if not kws:
         return False

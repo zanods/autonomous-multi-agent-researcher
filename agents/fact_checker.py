@@ -83,4 +83,6 @@ def _verify_staged(
         f"staged: {total_ok}/{len(claims)} claims verified "
         f"({len(auto_ok)} exact-match, {len(llm_ok)} LLM-verified, {len(llm_bad)} failed)"
     )
-    return not llm_bad, note
+    # Every claim must be verified — an empty/garbled LLM reply verifies
+    # nothing, so it must not pass vacuously.
+    return total_ok == len(claims), note

@@ -4,11 +4,11 @@ from dataclasses import dataclass, field
 
 from optimization.tokens import count_tokens, truncate_to_tokens
 
-# USD per 1M input tokens — approximate, check current provider pricing.
+# USD per 1M tokens as (input, output) — approximate, check current pricing.
 PRICES = {
-    "gpt-4o-mini": 0.15,
-    "gpt-4o": 2.50,
-    "gemini-2.0-flash": 0.10,
+    "gpt-4o-mini": (0.15, 0.60),
+    "gpt-4o": (2.50, 10.00),
+    "gemini-2.0-flash": (0.10, 0.40),
 }
 
 
@@ -73,10 +73,14 @@ class TokenBudget:
         return sum(v["input"] + v["output"] for v in self.measured.values())
 
     def estimated_cost_usd(self, model: str = "gpt-4o-mini") -> float:
-        return self.total_tokens() / 1_000_000 * PRICES.get(model, 0.0)
+        in_price, _ = PRICES.get(model, (0.0, 0.0))
+        return self.total_tokens() / 1_000_000 * in_price
 
     def measured_cost_usd(self, model: str = "gpt-4o-mini") -> float:
-        return self.total_measured() / 1_000_000 * PRICES.get(model, 0.0)
+        in_price, out_price = PRICES.get(model, (0.0, 0.0))
+        total_in = sum(v["input"] for v in self.measured.values())
+        total_out = sum(v["output"] for v in self.measured.values())
+        return (total_in * in_price + total_out * out_price) / 1_000_000
 
     def report(self, model: str = "gpt-4o-mini") -> str:
         if self.measured:
