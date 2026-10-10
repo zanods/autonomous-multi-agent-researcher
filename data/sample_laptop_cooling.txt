@@ -1,0 +1,20 @@
+High-TDP laptop cooling: sample knowledge-base doc
+
+Gaming laptops with high-TDP processors (55W and above) rely on advanced
+cooling to sustain boost clocks. The most effective designs combine vapor
+chamber cold plates with dual high-static-pressure fans. A vapor chamber
+spreads heat laterally across the heatsink far better than traditional
+copper heat pipes, reducing hotspot temperatures by 5 to 10 degrees
+Celsius under sustained load.
+
+Fan curves matter as much as the heatsink. Aggressive curves hold higher
+clocks but produce significant noise, often above 50 dBA. Balanced profiles
+trade roughly 5 percent performance for much quieter operation. Undervolting
+the CPU by 50 to 80 millivolts is a common companion tweak: it lowers heat
+output without reducing clock speeds, letting the cooling system sustain
+boost longer.
+
+Liquid metal thermal interface material offers another 3 to 7 degrees of
+improvement over stock paste, but it is electrically conductive and risky
+to apply. For most users, a quality conventional repaste plus a raised
+rear stand for airflow gives the best risk-adjusted gains.
