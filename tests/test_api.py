@@ -5,9 +5,16 @@ from fastapi.testclient import TestClient
 
 def _client(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", str(tmp_path / "test.db"))
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    from api.main import app
-
+    from api.main import app  # noqa: E402  (import loads .env as a side effect)
+    # Delete AFTER the import: load_dotenv() re-populates keys otherwise.
+    for key in (
+        "GOOGLE_API_KEY",
+        "GROQ_API_KEY",
+        "CEREBRAS_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
     return TestClient(app)
 
 

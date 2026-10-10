@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 from agents.llm import get_llm, message_text
 from models.task import Task
@@ -8,6 +9,10 @@ from optimization.budget import TokenBudget
 from optimization.claims import exact_match_verify, split_claims
 
 OPTIMIZE = os.getenv("OPTIMIZE_TOKENS", "1") == "1"
+
+# Strict verdict format: "1. PASS" / "2: FAIL". Anything else is fail-closed —
+# a loose `"PASS" in line` check would let "2: FAIL - does not PASS" through.
+_VERDICT = re.compile(r"^\s*\d+\s*[:.]\s*(PASS|FAIL)\b", re.IGNORECASE)
 
 
 def verify_task(
@@ -76,7 +81,8 @@ def _verify_staged(
         text = message_text(out)
         for i, line in enumerate(text.strip().splitlines()):
             target = need_llm[i] if i < len(need_llm) else line
-            (llm_ok if "PASS" in line.upper() else llm_bad).append(target)
+            m = _VERDICT.match(line)
+            (llm_ok if m and m.group(1).upper() == "PASS" else llm_bad).append(target)
 
     total_ok = len(auto_ok) + len(llm_ok)
     note = (

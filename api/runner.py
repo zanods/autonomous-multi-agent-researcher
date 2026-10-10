@@ -43,7 +43,9 @@ def run_task(task_id: str) -> None:
             task.transition(TaskStatus.NEEDS_RETRY)
         else:
             task.transition(TaskStatus.FAILED)
-    except Exception:
+    except Exception as e:
+        # Keep the failure cause — a bare FAILED with no reason is undebuggable.
+        task.result = f"error: {type(e).__name__}: {e}"
         task.transition(TaskStatus.FAILED)
     store.save_task(task)
 

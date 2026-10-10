@@ -103,3 +103,48 @@ def test_measured_cost_splits_input_output():
     # gpt-4o-mini: $0.15/1M in + $0.60/1M out = $0.75
     assert b.measured_cost_usd("gpt-4o-mini") == 0.75
     assert b.measured_cost_usd("unknown-model") == 0.0
+
+
+def test_staged_verify_fail_not_flipped_by_pass_in_text(monkeypatch):
+    """A FAIL verdict whose explanation contains the word PASS must stay FAIL."""
+    import agents.fact_checker as fc_mod
+
+    task = Task(
+        title="Sample task",
+        result="Vapor chambers spread heat laterally across gaming laptop heatsinks.",
+    )
+    task.evidence_texts = ["Completely unrelated evidence about battery chemistry."]
+
+    class _TrickyLLM:
+        def invoke(self, prompt):
+            class R:
+                content = "1: FAIL - the evidence does not PASS the bar for this claim."
+            return R()
+
+    monkeypatch.setattr(fc_mod, "get_llm", lambda: _TrickyLLM())
+    ok, note = fc_mod.verify_task(task, mock_mode=False)
+    assert ok is False
+    assert "1 failed" in note
+
+
+def test_staged_verify_accepts_both_verdict_formats(monkeypatch):
+    """'1. PASS' and '1: PASS' are both valid verdict lines."""
+    import agents.fact_checker as fc_mod
+
+    task = Task(
+        title="Sample task",
+        result="Vapor chambers spread heat laterally across gaming laptop heatsinks.",
+    )
+    task.evidence_texts = ["Vapor chambers spread heat laterally across gaming laptop heatsinks."]
+
+    class _PassLLM:
+        def invoke(self, prompt):
+            class R:
+                content = "1. PASS"
+            return R()
+
+    # Force the claim past exact-match so the LLM path is exercised.
+    monkeypatch.setattr(fc_mod, "exact_match_verify", lambda c, t: False)
+    monkeypatch.setattr(fc_mod, "get_llm", lambda: _PassLLM())
+    ok, note = fc_mod.verify_task(task, mock_mode=False)
+    assert ok is True

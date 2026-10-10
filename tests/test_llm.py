@@ -2,8 +2,14 @@ from agents import llm as llm_mod
 
 
 def test_no_key_no_llm(monkeypatch):
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    for key in (
+        "GOOGLE_API_KEY",
+        "GROQ_API_KEY",
+        "CEREBRAS_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
     assert llm_mod.get_llm() is None
     assert llm_mod.has_api_key() is False
 
