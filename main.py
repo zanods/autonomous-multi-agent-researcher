@@ -23,22 +23,30 @@ def main() -> None:
         parser.error("--live needs GOOGLE_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY or OPENAI_API_KEY set (see .env.example)")
 
     app = build_workflow()
-    result = app.invoke(
-        {
-            "query": args.query,
-            "tasks": [],
-            "findings": [],
-            "run_log": [],
-            "current_task_id": None,
-            "report": None,
-            "mock_mode": mock_mode,
-        }
-    )
+    initial_state = {
+        "query": args.query,
+        "tasks": [],
+        "findings": [],
+        "run_log": [],
+        "current_task_id": None,
+        "report": None,
+        "mock_mode": mock_mode,
+    }
 
+    # Stream node by node so progress is visible live — a silent 20-minute
+    # hang taught us never to wait for the final invoke() again.
+    print("--- progress (live) ---", flush=True)
+    last_log_len = 0
+    state = initial_state
+    for state in app.stream(initial_state, stream_mode="values"):
+        lines = state.get("run_log", [])
+        for line in lines[last_log_len:]:
+            print(line, flush=True)
+        last_log_len = len(lines)
+    result = state
+
+    print("\n--- report ---")
     print(result["report"])
-    print("\n--- run log ---")
-    for line in result["run_log"]:
-        print(line)
 
     budget = result.get("token_budget")
     if budget is not None and budget.usage:
