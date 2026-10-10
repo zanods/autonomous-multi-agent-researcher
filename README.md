@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/33066236/README.md)
 # 🤖 Autonomous Multi-Agent Research & Analysis System
 
 An end-to-end **Agentic AI research workflow** designed to decompose complex user queries, retrieve relevant information, perform fact-checking, and synthesize structured analytical reports.
@@ -92,9 +91,10 @@ autonomous-multi-agent-researcher/
 │
 ├── agents/
 │   ├── planner.py
-│   ├── retriever.py
-│   ├── reviewer.py
-│   └── synthesizer.py
+│   ├── researcher.py
+│   ├── fact_checker.py
+│   ├── synthesizer.py
+│   └── llm.py
 │
 ├── models/
 │   └── task.py
@@ -103,17 +103,34 @@ autonomous-multi-agent-researcher/
 │   ├── state.py
 │   └── workflow.py
 │
+├── rag/
+│   ├── embeddings.py
+│   ├── vectorstore.py
+│   └── retriever.py
+│
+├── optimization/
+│   ├── tokens.py
+│   ├── budget.py
+│   └── claims.py
+│
 ├── tools/
-│   └── ...
+│   └── web_search.py
+│
+├── scripts/
+│   └── ingest.py
 │
 ├── data/
-│   └── ...
+│   └── sample_laptop_cooling.txt
 │
 ├── config/
-│   └── ...
+│   └── settings.py
 │
 ├── tests/
-│   └── ...
+│   ├── test_task.py
+│   ├── test_workflow.py
+│   ├── test_rag.py
+│   ├── test_web_search.py
+│   └── test_optimization.py
 │
 ├── .env.example
 ├── requirements.txt
@@ -127,20 +144,21 @@ The repository structure will evolve as new components are implemented.
 
 ## 🚀 Development Roadmap
 
-### Sprint 1 — Data Schema & State Core
+### Sprint 1 — Data Schema & State Core ✅
 
-- [ ] Define Pydantic `Task` schema
-- [ ] Define LangGraph `AgentState`
-- [ ] Create initial `StateGraph`
-- [ ] Test task state transitions
+- [x] Define Pydantic `Task` schema (with validated status transitions)
+- [x] Define LangGraph `AgentState`
+- [x] Create initial `StateGraph` (planner → researcher → fact-checker → synthesizer)
+- [x] Test task state transitions
 
-### Sprint 2 — Core Agents
+### Sprint 2 — Core Agents ✅
 
-- [ ] Implement Planner Agent
-- [ ] Implement Research / Execution Agent
-- [ ] Integrate basic RAG retrieval
-- [ ] Implement Reviewer / Fact-Checker Agent
-- [ ] Add task retry flow
+- [x] Implement Planner Agent (mock + LLM structured output)
+- [x] Implement Research / Execution Agent (RAG → web search → model fallback)
+- [x] Integrate basic RAG retrieval (ChromaDB + embeddings + Cohere rerank hook)
+- [x] Implement Reviewer / Fact-Checker Agent (two-stage: exact-match + LLM review)
+- [x] Add task retry flow (`NEEDS_RETRY` with `max_retries`)
+- [x] Token optimization module (per-node budgets, cost reporting)
 
 ### Sprint 3 — Backend API
 
@@ -164,7 +182,7 @@ The repository structure will evolve as new components are implemented.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/autonomous-multi-agent-researcher.git
+git clone https://github.com/zanods/autonomous-multi-agent-researcher.git
 cd autonomous-multi-agent-researcher
 ```
 
@@ -216,10 +234,17 @@ LANGCHAIN_TRACING_V2=true
 
 ### 5. Run the pipeline
 
-Once the core pipeline is implemented:
+Mock mode runs with no API keys (deterministic sample outputs, great for testing the graph):
 
 ```bash
 python main.py --query "Evaluate the impact of high-TDP laptop cooling designs on sustained clock speeds"
+```
+
+Live mode uses real LLMs and tools — set keys in `.env` first (see `.env.example`):
+
+```bash
+python scripts/ingest.py   # optional: load your docs into ChromaDB
+python main.py --query "..." --live
 ```
 
 ---
@@ -256,16 +281,17 @@ The project will use the **Ragas framework** to evaluate retrieval and generatio
 
 ## 📌 Project Status
 
-**🚧 In Progress**
+**✅ Sprints 1–2 complete**
 
-Current focus:
+Done:
 
-1. Task Card Pydantic schema
-2. LangGraph state definition
-3. Initial workflow graph
-4. Task state transition tests
+1. Pydantic `Task` schema with validated status transitions
+2. LangGraph `AgentState` + `StateGraph` (planner → researcher → fact-checker → synthesizer)
+3. Core agents: RAG via ChromaDB, Tavily web search, retry flow
+4. Token optimization: two-stage fact-check, per-node budgets, cost reporting
+5. 15 pytest tests passing
 
-Future milestones will add the research agents, RAG pipeline, tool integration, API, evaluation, and UI.
+Next up: FastAPI backend (Sprint 3), then Streamlit UI + demo (Sprint 4).
 
 ---
 
