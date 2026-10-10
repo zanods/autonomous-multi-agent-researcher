@@ -160,12 +160,13 @@ The repository structure will evolve as new components are implemented.
 - [x] Add task retry flow (`NEEDS_RETRY` with `max_retries`)
 - [x] Token optimization module (per-node budgets, cost reporting)
 
-### Sprint 3 — Backend API
+### Sprint 3 — Backend API ✅
 
-- [ ] Create `POST /goals`
-- [ ] Create `GET /tasks`
-- [ ] Create `POST /tasks/{id}/run`
-- [ ] Connect API endpoints to the LangGraph workflow
+- [x] Create `POST /goals` (planner creates tasks immediately)
+- [x] Create `GET /tasks` (filter by `goal_id`, poll for status)
+- [x] Create `POST /tasks/{id}/run` (research + fact-check in a background task)
+- [x] Connect API endpoints to the LangGraph workflow
+- [x] SQLite persistence (`api/store.py`) + `GET /goals/{id}/report`
 
 ### Sprint 4 — UI & Demo
 
@@ -247,6 +248,26 @@ python scripts/ingest.py   # optional: load your docs into ChromaDB
 python main.py --query "..." --live
 ```
 
+### 6. Run the API server (Sprint 3)
+
+```bash
+uvicorn api.main:app --reload
+```
+
+Then use the endpoints:
+
+```bash
+curl -X POST localhost:8000/goals -H 'Content-Type: application/json' \
+  -d '{"query": "Evaluate high-TDP laptop cooling designs"}'
+# → {"id": "<goal_id>", "tasks": [...]}
+
+curl -X POST localhost:8000/tasks/<task_id>/run   # runs in background
+curl "localhost:8000/tasks?goal_id=<goal_id>"       # poll status
+curl localhost:8000/goals/<goal_id>/report          # final report
+```
+
+Interactive docs: http://localhost:8000/docs
+
 ---
 
 ## 📊 Evaluation & Benchmarks
@@ -281,7 +302,7 @@ The project will use the **Ragas framework** to evaluate retrieval and generatio
 
 ## 📌 Project Status
 
-**✅ Sprints 1–2 complete**
+**✅ Sprints 1–3 complete**
 
 Done:
 
@@ -289,9 +310,10 @@ Done:
 2. LangGraph `AgentState` + `StateGraph` (planner → researcher → fact-checker → synthesizer)
 3. Core agents: RAG via ChromaDB, Tavily web search, retry flow
 4. Token optimization: two-stage fact-check, per-node budgets, cost reporting
-5. 15 pytest tests passing
+5. 18 pytest tests passing
+6. FastAPI backend: goals/tasks endpoints, SQLite persistence, background runs
 
-Next up: FastAPI backend (Sprint 3), then Streamlit UI + demo (Sprint 4).
+Next up: Streamlit UI + demo (Sprint 4).
 
 ---
 
