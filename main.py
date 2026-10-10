@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import os
 
+from agents.llm import has_api_key
 from graph.workflow import build_workflow
 
 
@@ -19,8 +19,8 @@ def main() -> None:
     args = parser.parse_args()
 
     mock_mode = not args.live
-    if args.live and not os.getenv("OPENAI_API_KEY"):
-        parser.error("--live needs OPENAI_API_KEY set (see .env.example)")
+    if args.live and not has_api_key():
+        parser.error("--live needs GOOGLE_API_KEY or OPENAI_API_KEY set (see .env.example)")
 
     app = build_workflow()
     result = app.invoke(

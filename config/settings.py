@@ -4,8 +4,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    google_api_key: str = ""
     openai_api_key: str = ""
-    model: str = "gpt-4o-mini"
+    model: str = "gemini-2.0-flash"
     embedding_model: str = "text-embedding-3-small"
     tavily_api_key: str = ""
     cohere_api_key: str = ""

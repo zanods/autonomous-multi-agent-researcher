@@ -33,6 +33,12 @@ class MockEmbeddings(Embeddings):
 
 
 def get_embeddings() -> Embeddings:
+    if os.getenv("GOOGLE_API_KEY"):
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+        return GoogleGenerativeAIEmbeddings(
+            model=os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
+        )
     if os.getenv("OPENAI_API_KEY"):
         from langchain_openai import OpenAIEmbeddings
 

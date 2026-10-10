@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
-
 from agents.fact_checker import verify_task
+from agents.llm import has_api_key
 from agents.researcher import research_task
 from agents.synthesizer import synthesize
 from api import store
@@ -11,7 +10,7 @@ from optimization.budget import TokenBudget
 
 
 def _mock_mode() -> bool:
-    return not os.getenv("OPENAI_API_KEY")
+    return not has_api_key()
 
 
 def run_task(task_id: str) -> None:
