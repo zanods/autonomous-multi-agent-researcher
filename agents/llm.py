@@ -43,8 +43,12 @@ def get_llm():
     if provider == "openrouter":
         from langchain_openai import ChatOpenAI
 
+        # Dedicated env var: the generic MODEL default (gemini-2.0-flash) is a
+        # paid slug on OpenRouter, so OpenRouter gets its own default.
+        # cohere/north-mini-code:free is the verified-working default as of
+        # 2026-10-10 (gemma-4-31b-it:free was rate-limited on the shared pool).
         return ChatOpenAI(
-            model=os.getenv("MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
+            model=os.getenv("OPENROUTER_MODEL", "cohere/north-mini-code:free"),
             api_key=os.getenv("OPENROUTER_API_KEY"),
             base_url="https://openrouter.ai/api/v1",
             default_headers={

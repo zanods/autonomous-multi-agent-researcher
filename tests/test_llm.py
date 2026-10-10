@@ -30,3 +30,25 @@ def test_openrouter_fallback(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert llm_mod._active_provider() == "openrouter"
     assert llm_mod.has_api_key() is True
+
+
+class _ExplodingLLM:
+    """Simulates a model whose structured-output path blows up."""
+
+    def with_structured_output(self, schema):
+        raise RuntimeError("tool calling not supported")
+
+    def invoke(self, prompt):
+        class R:
+            content = '{"tasks": [{"title": "Task One", "description": "Desc One"}, {"title": "Task Two", "description": "Desc Two"}]}'
+
+        return R()
+
+
+def test_planner_json_fallback(monkeypatch):
+    import agents.planner as planner_mod
+
+    monkeypatch.setattr(planner_mod, "get_llm", lambda: _ExplodingLLM())
+    tasks = planner_mod.plan_tasks("some query", mock_mode=False)
+    assert len(tasks) == 2
+    assert tasks[0].title == "Task One"

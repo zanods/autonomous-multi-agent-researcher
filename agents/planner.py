@@ -30,12 +30,42 @@ def plan_tasks(query: str, mock_mode: bool = True) -> list[Task]:
             Task(title=f"{title} — {short}", description=desc, assigned_agent="researcher")
             for title, desc in _MOCK_SUBTASKS
         ]
-    plan: TaskPlan = llm.with_structured_output(TaskPlan).invoke(
-        "Decompose this research query into 3-5 concrete subtasks. "
-        "Each subtask needs a short title and a one-line description. "
-        f"Query: {query}"
-    )
+    try:
+        plan: TaskPlan = llm.with_structured_output(TaskPlan).invoke(
+            "Decompose this research query into 3-5 concrete subtasks. "
+            "Each subtask needs a short title and a one-line description. "
+            f"Query: {query}"
+        )
+    except Exception:
+        # Free-tier models often fumble tool calling — fall back to raw JSON.
+        plan = _plan_via_json(llm, query)
     return [
         Task(title=d.title, description=d.description, assigned_agent="researcher")
         for d in plan.tasks
     ]
+
+
+def _plan_via_json(llm, query: str) -> TaskPlan:
+    """Fallback planner: ask for raw JSON and parse it manually."""
+    import json
+    import re
+
+    out = llm.invoke(
+        "Decompose this research query into 3-5 concrete subtasks. "
+        'Reply with ONLY a JSON object, no other text, like: '
+        '{"tasks": [{"title": "Subtask title", "description": "one-line description"}]}. '
+        f"Query: {query}"
+    )
+    text = out.content if hasattr(out, "content") else str(out)
+    m = re.search(r"\{.*\}", text, re.S)
+    try:
+        data = json.loads(m.group(0)) if m else {"tasks": []}
+        return TaskPlan(**data)
+    except Exception:
+        short = query[:60]
+        return TaskPlan(
+            tasks=[
+                TaskDraft(title=f"{title} — {short}", description=desc)
+                for title, desc in _MOCK_SUBTASKS
+            ]
+        )
