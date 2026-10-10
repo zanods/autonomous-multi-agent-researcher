@@ -26,6 +26,11 @@ def get_llm():
 
     Agents fall back to deterministic mock outputs when this returns None,
     so the graph can be exercised end-to-end without spending API credits.
+
+    request_timeout=90 on the OpenAI-compatible providers: the SDK default
+    (~10 min) turns free-tier congestion into silent multi-minute hangs.
+    Failing fast surfaces the real error instead. (ChatGoogleGenerativeAI
+    has no such knob, so Google is left at its default.)
     """
     provider = _active_provider()
     if provider == "google":
@@ -38,7 +43,9 @@ def get_llm():
         from langchain_groq import ChatGroq
 
         return ChatGroq(
-            model=os.getenv("MODEL", "llama-3.3-70b-versatile"), temperature=0.2
+            model=os.getenv("MODEL", "llama-3.3-70b-versatile"),
+            temperature=0.2,
+            request_timeout=90,
         )
     if provider == "openrouter":
         from langchain_openai import ChatOpenAI
@@ -56,9 +63,14 @@ def get_llm():
                 "X-Title": "autonomous-multi-agent-researcher",
             },
             temperature=0.2,
+            request_timeout=90,
         )
     if provider == "openai":
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(model=os.getenv("MODEL", "gpt-4o-mini"), temperature=0.2)
+        return ChatOpenAI(
+            model=os.getenv("MODEL", "gpt-4o-mini"),
+            temperature=0.2,
+            request_timeout=90,
+        )
     return None

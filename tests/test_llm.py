@@ -52,3 +52,19 @@ def test_planner_json_fallback(monkeypatch):
     tasks = planner_mod.plan_tasks("some query", mock_mode=False)
     assert len(tasks) == 2
     assert tasks[0].title == "Task One"
+
+
+def test_openai_compatible_providers_set_request_timeout(monkeypatch):
+    """Free-tier congestion must fail fast instead of hanging on the ~10min SDK default."""
+    # Sanitize proxy env: the workspace NO_PROXY has bracketed IPv6 entries
+    # that break httpx client construction.
+    for var in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    for env_key in ("GROQ_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setenv(env_key, "fake")
+        llm = llm_mod.get_llm()
+        assert llm.request_timeout == 90, env_key
