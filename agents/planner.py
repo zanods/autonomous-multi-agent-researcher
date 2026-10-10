@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from agents.llm import get_llm
 from models.task import Task
+from optimization.budget import TokenBudget
 
 
 class TaskDraft(BaseModel):
@@ -22,7 +23,9 @@ _MOCK_SUBTASKS = [
 ]
 
 
-def plan_tasks(query: str, mock_mode: bool = True) -> list[Task]:
+def plan_tasks(
+    query: str, mock_mode: bool = True, budget: TokenBudget | None = None
+) -> list[Task]:
     llm = None if mock_mode else get_llm()
     if mock_mode or llm is None:
         short = query[:60]
@@ -30,22 +33,31 @@ def plan_tasks(query: str, mock_mode: bool = True) -> list[Task]:
             Task(title=f"{title} — {short}", description=desc, assigned_agent="researcher")
             for title, desc in _MOCK_SUBTASKS
         ]
+    plan = None
     try:
-        plan: TaskPlan = llm.with_structured_output(TaskPlan).invoke(
+        # include_raw=True keeps the raw AIMessage so we can record real usage.
+        raw = llm.with_structured_output(TaskPlan, include_raw=True).invoke(
             "Decompose this research query into 3-5 concrete subtasks. "
             "Each subtask needs a short title and a one-line description. "
             f"Query: {query}"
         )
+        if budget is not None and raw.get("raw") is not None:
+            budget.record("planner", raw["raw"])
+        plan = raw.get("parsed")
     except Exception:
+        plan = None
+    if plan is None:
         # Free-tier models often fumble tool calling — fall back to raw JSON.
-        plan = _plan_via_json(llm, query)
+        plan = _plan_via_json(llm, query, budget)
     return [
         Task(title=d.title, description=d.description, assigned_agent="researcher")
         for d in plan.tasks
     ]
 
 
-def _plan_via_json(llm, query: str) -> TaskPlan:
+def _plan_via_json(
+    llm, query: str, budget: TokenBudget | None = None
+) -> TaskPlan:
     """Fallback planner: ask for raw JSON and parse it manually."""
     import json
     import re
@@ -56,6 +68,8 @@ def _plan_via_json(llm, query: str) -> TaskPlan:
         '{"tasks": [{"title": "Subtask title", "description": "one-line description"}]}. '
         f"Query: {query}"
     )
+    if budget is not None:
+        budget.record("planner", out)
     text = out.content if hasattr(out, "content") else str(out)
     m = re.search(r"\{.*\}", text, re.S)
     try:

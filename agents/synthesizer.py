@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from agents.llm import get_llm
 from models.task import Task, TaskStatus
+from optimization.budget import TokenBudget
 
 
-def synthesize(query: str, tasks: list[Task], mock_mode: bool = True) -> str:
+def synthesize(
+    query: str,
+    tasks: list[Task],
+    mock_mode: bool = True,
+    budget: TokenBudget | None = None,
+) -> str:
     llm = None if mock_mode else get_llm()
     done = [t for t in tasks if t.status == TaskStatus.DONE]
     failed = [t for t in tasks if t.status == TaskStatus.FAILED]
@@ -26,4 +32,6 @@ def synthesize(query: str, tasks: list[Task], mock_mode: bool = True) -> str:
         "Synthesize the verified findings below into a structured analytical "
         f"report with citations.\nQuery: {query}\n\n{sections}"
     )
+    if budget is not None:
+        budget.record("synthesizer", out)
     return out.content if hasattr(out, "content") else str(out)

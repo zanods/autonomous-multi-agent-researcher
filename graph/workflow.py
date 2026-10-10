@@ -16,8 +16,15 @@ def _log(state: AgentState, msg: str) -> list[str]:
 
 
 def planner_node(state: AgentState) -> dict:
-    tasks = plan_tasks(state["query"], mock_mode=state.get("mock_mode", True))
-    return {"tasks": tasks, "run_log": _log(state, f"[planner] created {len(tasks)} tasks")}
+    budget = state.get("token_budget") or TokenBudget()
+    tasks = plan_tasks(
+        state["query"], mock_mode=state.get("mock_mode", True), budget=budget
+    )
+    return {
+        "tasks": tasks,
+        "token_budget": budget,
+        "run_log": _log(state, f"[planner] created {len(tasks)} tasks"),
+    }
 
 
 def researcher_node(state: AgentState) -> dict:
@@ -69,13 +76,18 @@ def route_after_check(state: AgentState) -> str:
 
 
 def synthesizer_node(state: AgentState) -> dict:
-    report = synthesize(
-        state["query"], state["tasks"], mock_mode=state.get("mock_mode", True)
-    )
     budget = state.get("token_budget")
+    report = synthesize(
+        state["query"],
+        state["tasks"],
+        mock_mode=state.get("mock_mode", True),
+        budget=budget,
+    )
     msg = "[synthesizer] report ready"
-    if budget is not None and budget.usage:
-        msg += f" | context tokens used: {budget.total_tokens()}"
+    if budget is not None and budget.measured:
+        msg += f" | tokens used: {budget.total_measured()}"
+    elif budget is not None and budget.usage:
+        msg += f" | context tokens used (est.): {budget.total_tokens()}"
     return {"report": report, "run_log": _log(state, msg)}
 
 

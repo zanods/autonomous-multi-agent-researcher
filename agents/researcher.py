@@ -50,6 +50,8 @@ def research_task(
         "Cite sources like [KB ...] or [WEB] where used.\n"
         f"Task: {task.title}\n{task.description}\nContext:\n{context}"
     )
+    if budget is not None:
+        budget.record("researcher", notes)
     task.result = notes.content if hasattr(notes, "content") else str(notes)
     task.evidence = [h["url"] for h in web_hits if h.get("url")]
     task.evidence += [f"kb:{h['id']}" for h in rag_hits]

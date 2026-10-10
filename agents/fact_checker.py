@@ -30,15 +30,19 @@ def verify_task(
         return True, "mock-verified (no LLM configured)"
     if optimize:
         return _verify_staged(task, llm, budget)
-    return _verify_whole(task, llm)
+    return _verify_whole(task, llm, budget)
 
 
-def _verify_whole(task: Task, llm) -> tuple[bool, str]:
+def _verify_whole(
+    task: Task, llm, budget: TokenBudget | None = None
+) -> tuple[bool, str]:
     verdict = llm.invoke(
         "You are a fact-checker. Given the task and its evidence, reply with exactly "
         "one line: PASS or FAIL, then a short reason.\n"
         f"Task: {task.title}\nNotes: {task.result}\nEvidence: {task.evidence}"
     )
+    if budget is not None:
+        budget.record("fact_checker", verdict)
     text = verdict.content if hasattr(verdict, "content") else str(verdict)
     text = text.strip()
     return text.upper().startswith("PASS"), text[:200]
@@ -68,6 +72,8 @@ def _verify_staged(
             + f"\nEvidence:\n{snippets}"
         )
         out = llm.invoke(prompt)
+        if budget is not None:
+            budget.record("fact_checker", out)
         text = out.content if hasattr(out, "content") else str(out)
         for i, line in enumerate(text.strip().splitlines()):
             target = need_llm[i] if i < len(need_llm) else line
