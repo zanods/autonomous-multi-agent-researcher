@@ -39,6 +39,7 @@ class Task(BaseModel):
     assigned_agent: str = "researcher"
     evidence: list[str] = Field(default_factory=list)
     evidence_texts: list[str] = Field(default_factory=list)
+    unverified_claims: list[str] = Field(default_factory=list)
     result: str | None = None
     retries: int = 0
     max_retries: int = 2

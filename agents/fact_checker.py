@@ -20,19 +20,22 @@ def verify_task(
     mock_mode: bool = True,
     optimize: bool = OPTIMIZE,
     budget: TokenBudget | None = None,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, list[str]]:
     """Two-stage fact check when optimize=True:
 
     1. exact keyword match per claim (0 LLM tokens),
     2. LLM judges only the claims that failed stage 1, with trimmed evidence.
 
     Falls back to the classic whole-task prompt when optimize=False.
+
+    Returns (ok, note, failed_claims) — the failed claims let a retry focus
+    its research instead of re-doing everything from scratch.
     """
     if mock_mode:
-        return True, "mock-verified"
+        return True, "mock-verified", []
     llm = get_llm()
     if llm is None:
-        return True, "mock-verified (no LLM configured)"
+        return True, "mock-verified (no LLM configured)", []
     if optimize:
         return _verify_staged(task, llm, budget)
     return _verify_whole(task, llm, budget)
@@ -40,7 +43,7 @@ def verify_task(
 
 def _verify_whole(
     task: Task, llm, budget: TokenBudget | None = None
-) -> tuple[bool, str]:
+) -> tuple[bool, str, list[str]]:
     verdict = llm.invoke(
         "You are a fact-checker. Given the task and its evidence, reply with exactly "
         "one line: PASS or FAIL, then a short reason.\n"
@@ -49,7 +52,7 @@ def _verify_whole(
     if budget is not None:
         budget.record("fact_checker", verdict)
     text = message_text(verdict).strip()
-    return text.upper().startswith("PASS"), text[:200]
+    return text.upper().startswith("PASS"), text[:200], []
 
 
 def _verify_staged(
@@ -57,7 +60,7 @@ def _verify_staged(
 ) -> tuple[bool, str]:
     claims = split_claims(task.result or "")
     if not claims:
-        return False, "staged: no verifiable claims extracted"
+        return False, "staged: no verifiable claims extracted", []
     texts = task.evidence_texts or []
 
     auto_ok, need_llm = [], []
@@ -89,6 +92,10 @@ def _verify_staged(
         f"staged: {total_ok}/{len(claims)} claims verified "
         f"({len(auto_ok)} exact-match, {len(llm_ok)} LLM-verified, {len(llm_bad)} failed)"
     )
+    # Failed = explicit FAILs + claims the LLM never judged (short/garbled
+    # reply). Identity-based: the lists hold the same objects as `claims`.
+    judged = set(map(id, llm_ok)) | set(map(id, llm_bad))
+    failed = list(llm_bad) + [c for c in need_llm if id(c) not in judged]
     # Every claim must be verified — an empty/garbled LLM reply verifies
     # nothing, so it must not pass vacuously.
-    return total_ok == len(claims), note
+    return total_ok == len(claims), note, failed

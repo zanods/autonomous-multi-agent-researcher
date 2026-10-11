@@ -37,7 +37,10 @@ def researcher_node(state: AgentState) -> dict:
         return {"run_log": _log(state, "[researcher] nothing to do")}
     budget = state.get("token_budget") or TokenBudget()
     nxt.transition(TaskStatus.IN_PROGRESS)
-    research_task(nxt, mock_mode=state.get("mock_mode", True), budget=budget)
+    # On retry, narrow research to the claims that failed verification.
+    focus = nxt.unverified_claims or None
+    research_task(nxt, mock_mode=state.get("mock_mode", True), budget=budget,
+                  focus_claims=focus)
     nxt.transition(TaskStatus.RESEARCHED)
     return {
         "tasks": tasks,
@@ -50,15 +53,17 @@ def researcher_node(state: AgentState) -> dict:
 def fact_checker_node(state: AgentState) -> dict:
     tasks = state["tasks"]
     cur = next(t for t in tasks if t.id == state.get("current_task_id"))
-    ok, note = verify_task(
+    ok, note, failed = verify_task(
         cur, mock_mode=state.get("mock_mode", True), budget=state.get("token_budget")
     )
     if ok:
+        cur.unverified_claims = []
         cur.transition(TaskStatus.VERIFIED)
         cur.transition(TaskStatus.DONE)
         msg = f"[fact-checker] verified: {cur.title}"
     elif cur.can_retry():
         cur.retries += 1
+        cur.unverified_claims = failed
         cur.transition(TaskStatus.NEEDS_RETRY)
         msg = f"[fact-checker] weak evidence, retry {cur.retries}/{cur.max_retries}: {cur.title} ({note})"
     else:

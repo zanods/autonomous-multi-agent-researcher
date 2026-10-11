@@ -34,7 +34,7 @@ def run_task(task_id: str) -> None:
         task.transition(TaskStatus.RESEARCHED)
         store.save_task(task)
 
-        ok, _note = verify_task(task, mock_mode=mock, budget=budget)
+        ok, _note, _failed = verify_task(task, mock_mode=mock, budget=budget)
         if ok:
             task.transition(TaskStatus.VERIFIED)
             task.transition(TaskStatus.DONE)

@@ -16,7 +16,11 @@ def research_task(
     mock_mode: bool = True,
     optimize: bool = OPTIMIZE,
     budget: TokenBudget | None = None,
+    focus_claims: list[str] | None = None,
 ) -> Task:
+    """Research a task. When focus_claims is given (a retry after failed
+    verification), research narrows to those claims instead of broadening
+    the topic — retries must shrink the problem, not grow it."""
     llm = None if mock_mode else get_llm()
     if mock_mode or llm is None:
         task.evidence = [
@@ -35,7 +39,13 @@ def research_task(
 
     rag_texts = [h["text"] for h in rag_hits]
     web_texts = [f"{h['title']}: {h['snippet']}" for h in web_hits]
-    task.evidence_texts = rag_texts + web_texts
+    new_texts = rag_texts + web_texts
+    if focus_claims:
+        # Retry: accumulate evidence, don't discard what was already found.
+        seen = set(task.evidence_texts)
+        task.evidence_texts = task.evidence_texts + [t for t in new_texts if t not in seen]
+    else:
+        task.evidence_texts = new_texts
 
     context_parts = [f"[KB {h['id']}] {t[:800]}" for h, t in zip(rag_hits, rag_texts)]
     context_parts += [f"[WEB] {t}" for t in web_texts]
@@ -45,11 +55,22 @@ def research_task(
         budget = budget or TokenBudget()
         context = budget.spend("researcher", context)
 
-    notes = llm.invoke(
-        "Write concise research notes for the task below, grounded in the context. "
-        "Cite sources like [KB ...] or [WEB] where used.\n"
-        f"Task: {task.title}\n{task.description}\nContext:\n{context}"
-    )
+    if focus_claims:
+        prompt = (
+            "Earlier research left the following claims UNVERIFIED for lack of "
+            "evidence. Find targeted evidence for exactly these claims — do not "
+            "broaden the topic. Write SHORT notes: one paragraph per claim, "
+            "covering only the claims below.\n"
+            + "\n".join(f"- {c}" for c in focus_claims)
+            + f"\nTask: {task.title}\nContext:\n{context}"
+        )
+    else:
+        prompt = (
+            "Write concise research notes for the task below, grounded in the context. "
+            "Cite sources like [KB ...] or [WEB] where used.\n"
+            f"Task: {task.title}\n{task.description}\nContext:\n{context}"
+        )
+    notes = llm.invoke(prompt)
     if budget is not None:
         budget.record("researcher", notes)
     task.result = message_text(notes)

@@ -43,7 +43,7 @@ def test_split_claims():
 
 def test_verify_mock_unchanged():
     t = Task(title="Sample task", result="Some notes here that are long enough.")
-    ok, note = verify_task(t, mock_mode=True)
+    ok, note, _failed = verify_task(t, mock_mode=True)
     assert ok and note == "mock-verified"
 
 
@@ -88,7 +88,7 @@ def test_staged_verify_rejects_empty_llm_reply(monkeypatch):
             return R()
 
     monkeypatch.setattr(fc_mod, "get_llm", lambda: _EmptyLLM())
-    ok, note = fc_mod.verify_task(task, mock_mode=False)
+    ok, note, _failed = fc_mod.verify_task(task, mock_mode=False)
     assert ok is False
     assert "0/" in note
 
@@ -122,7 +122,7 @@ def test_staged_verify_fail_not_flipped_by_pass_in_text(monkeypatch):
             return R()
 
     monkeypatch.setattr(fc_mod, "get_llm", lambda: _TrickyLLM())
-    ok, note = fc_mod.verify_task(task, mock_mode=False)
+    ok, note, _failed = fc_mod.verify_task(task, mock_mode=False)
     assert ok is False
     assert "1 failed" in note
 
@@ -146,5 +146,101 @@ def test_staged_verify_accepts_both_verdict_formats(monkeypatch):
     # Force the claim past exact-match so the LLM path is exercised.
     monkeypatch.setattr(fc_mod, "exact_match_verify", lambda c, t: False)
     monkeypatch.setattr(fc_mod, "get_llm", lambda: _PassLLM())
-    ok, note = fc_mod.verify_task(task, mock_mode=False)
+    ok, note, _failed = fc_mod.verify_task(task, mock_mode=False)
     assert ok is True
+
+
+def test_verify_task_returns_failed_claims(monkeypatch):
+    """verify_task reports exactly which claims failed, for retry focus."""
+    import agents.fact_checker as fc_mod
+
+    task = Task(
+        title="Sample task",
+        result="Vapor chambers spread heat laterally across gaming laptop heatsinks. "
+        "Quantum batteries charge in five seconds flat.",
+    )
+    task.evidence_texts = ["Vapor chambers spread heat laterally across gaming laptop heatsinks."]
+
+    class _MixedLLM:
+        def invoke(self, prompt):
+            class R:
+                # Only one claim needs LLM review (the other exact-matches);
+                # judge it FAIL.
+                content = "1: FAIL - no supporting evidence found anywhere."
+            return R()
+
+    monkeypatch.setattr(fc_mod, "get_llm", lambda: _MixedLLM())
+    ok, note, failed = fc_mod.verify_task(task, mock_mode=False)
+    assert ok is False
+    assert len(failed) == 1
+    assert "Quantum batteries" in failed[0]
+
+
+def test_research_retry_narrows_to_failed_claims(monkeypatch):
+    """On retry, the researcher prompt targets failed claims and keeps notes short."""
+    import agents.researcher as rs_mod
+
+    captured = {}
+
+    class _SpyLLM:
+        def invoke(self, prompt):
+            captured["prompt"] = prompt
+            class R:
+                content = "Targeted notes."
+            return R()
+
+    monkeypatch.setattr(rs_mod, "get_llm", lambda: _SpyLLM())
+    monkeypatch.setattr(rs_mod, "rag_search", lambda q, k=4: [])
+    monkeypatch.setattr(rs_mod, "web_search", lambda q, max_results=5: [])
+
+    task = Task(title="Sample task", description="desc")
+    task.evidence_texts = ["old evidence"]
+    rs_mod.research_task(
+        task, mock_mode=False, focus_claims=["Claim about undervolting voltage range."]
+    )
+    assert "UNVERIFIED" in captured["prompt"]
+    assert "undervolting voltage range" in captured["prompt"]
+    assert "do not broaden the topic" in captured["prompt"]
+    # Old evidence is kept, not discarded.
+    assert task.evidence_texts == ["old evidence"]
+
+
+def test_workflow_retry_stores_unverified_claims(monkeypatch):
+    """fact_checker_node stashes failed claims so researcher_node can focus."""
+    from graph.workflow import fact_checker_node
+    from models.task import TaskStatus
+    import agents.fact_checker as fc_mod
+
+    task = Task(title="Sample task", result="Some long enough research notes here.")
+    task.transition(TaskStatus.IN_PROGRESS)
+    task.transition(TaskStatus.RESEARCHED)
+    state = {
+        "tasks": [task],
+        "current_task_id": task.id,
+        "mock_mode": True,
+        "token_budget": None,
+    }
+    # Mock mode verifies everything: no unverified claims stored.
+    fact_checker_node(state)
+    assert task.status.value == "done"
+    assert task.unverified_claims == []
+
+    # Now force a failure with known failed claims.
+    task2 = Task(title="Sample task 2", result="Some long enough research notes here.")
+    task2.transition(TaskStatus.IN_PROGRESS)
+    task2.transition(TaskStatus.RESEARCHED)
+    state2 = {
+        "tasks": [task2],
+        "current_task_id": task2.id,
+        "mock_mode": False,
+        "token_budget": None,
+    }
+    monkeypatch.setattr(
+        fc_mod, "verify_task", lambda *a, **k: (False, "staged: 0/1", ["the bad claim"])
+    )
+    import graph.workflow as wf_mod
+
+    monkeypatch.setattr(wf_mod, "verify_task", fc_mod.verify_task)
+    fact_checker_node(state2)
+    assert task2.status.value == "needs_retry"
+    assert task2.unverified_claims == ["the bad claim"]
