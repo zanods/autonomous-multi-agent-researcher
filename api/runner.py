@@ -13,33 +13,42 @@ def _mock_mode() -> bool:
     return not has_api_key()
 
 
+def _record_tokens(task: Task, budget: TokenBudget) -> None:
+    for m in budget.measured.values():
+        task.tokens_in += m["input"]
+        task.tokens_out += m["output"]
+
+
 def run_task(task_id: str) -> None:
     """Background job: research + fact-check one task, persisting each step.
 
-    Safe to call twice: skips tasks that are not PENDING / NEEDS_RETRY.
+    Safe to call twice: claim_task() atomically claims PENDING / NEEDS_RETRY
+    tasks, so a concurrent second call is a no-op. Mirrors the workflow's
+    retry logic — on retry, research narrows to the claims that failed
+    verification instead of starting over.
     """
-    row = store.get_task(task_id)
+    row = store.claim_task(task_id)
     if row is None:
         return
     task = Task(**row)
-    if task.status not in (TaskStatus.PENDING, TaskStatus.NEEDS_RETRY):
-        return
 
     mock = _mock_mode()
     budget = TokenBudget()
-    task.transition(TaskStatus.IN_PROGRESS)
-    store.save_task(task)
+    # On retry, narrow research to the claims that failed verification.
+    focus = task.unverified_claims or None
     try:
-        research_task(task, mock_mode=mock, budget=budget)
+        research_task(task, mock_mode=mock, budget=budget, focus_claims=focus)
         task.transition(TaskStatus.RESEARCHED)
         store.save_task(task)
 
-        ok, _note, _failed = verify_task(task, mock_mode=mock, budget=budget)
+        ok, _note, failed = verify_task(task, mock_mode=mock, budget=budget)
         if ok:
+            task.unverified_claims = []
             task.transition(TaskStatus.VERIFIED)
             task.transition(TaskStatus.DONE)
         elif task.can_retry():
             task.retries += 1
+            task.unverified_claims = failed
             task.transition(TaskStatus.NEEDS_RETRY)
         else:
             task.transition(TaskStatus.FAILED)
@@ -47,6 +56,7 @@ def run_task(task_id: str) -> None:
         # Keep the failure cause — a bare FAILED with no reason is undebuggable.
         task.result = f"error: {type(e).__name__}: {e}"
         task.transition(TaskStatus.FAILED)
+    _record_tokens(task, budget)
     store.save_task(task)
 
 

@@ -37,13 +37,30 @@ def init_db() -> None:
                 assigned_agent TEXT DEFAULT 'researcher',
                 evidence TEXT DEFAULT '[]',
                 evidence_texts TEXT DEFAULT '[]',
+                unverified_claims TEXT DEFAULT '[]',
                 result TEXT,
                 retries INTEGER DEFAULT 0,
                 max_retries INTEGER DEFAULT 2,
+                tokens_in INTEGER DEFAULT 0,
+                tokens_out INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY(goal_id) REFERENCES goals(id))"""
         )
+        _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns that older databases lack (CREATE TABLE IF NOT EXISTS
+    won't touch them)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+    for name, ddl in (
+        ("unverified_claims", "TEXT DEFAULT '[]'"),
+        ("tokens_in", "INTEGER DEFAULT 0"),
+        ("tokens_out", "INTEGER DEFAULT 0"),
+    ):
+        if name not in cols:
+            conn.execute(f"ALTER TABLE tasks ADD COLUMN {name} {ddl}")
 
 
 def _now() -> str:
@@ -76,14 +93,16 @@ def create_task(goal_id: str, task: Task) -> None:
         conn.execute(
             """INSERT INTO tasks
                (id, goal_id, title, description, status, assigned_agent,
-                evidence, evidence_texts, result, retries, max_retries,
-                created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                evidence, evidence_texts, unverified_claims, result, retries,
+                max_retries, tokens_in, tokens_out, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 d["id"], goal_id, d["title"], d["description"], d["status"],
                 d["assigned_agent"], json.dumps(d["evidence"]),
-                json.dumps(d["evidence_texts"]), d["result"], d["retries"],
-                d["max_retries"], d["created_at"], d["updated_at"],
+                json.dumps(d["evidence_texts"]),
+                json.dumps(d["unverified_claims"]), d["result"], d["retries"],
+                d["max_retries"], d["tokens_in"], d["tokens_out"],
+                d["created_at"], d["updated_at"],
             ),
         )
 
@@ -92,6 +111,9 @@ def _row_to_task_dict(row: sqlite3.Row) -> dict:
     d = dict(row)
     d["evidence"] = json.loads(d["evidence"] or "[]")
     d["evidence_texts"] = json.loads(d["evidence_texts"] or "[]")
+    d["unverified_claims"] = json.loads(d["unverified_claims"] or "[]")
+    d["tokens_in"] = int(d["tokens_in"] or 0)
+    d["tokens_out"] = int(d["tokens_out"] or 0)
     return d
 
 
@@ -117,11 +139,33 @@ def save_task(task: Task) -> None:
     with _connect() as conn:
         conn.execute(
             """UPDATE tasks SET title=?, description=?, status=?, assigned_agent=?,
-                evidence=?, evidence_texts=?, result=?, retries=?, max_retries=?,
+                evidence=?, evidence_texts=?, unverified_claims=?, result=?,
+                retries=?, max_retries=?, tokens_in=?, tokens_out=?,
                 updated_at=? WHERE id=?""",
             (
                 d["title"], d["description"], d["status"], d["assigned_agent"],
                 json.dumps(d["evidence"]), json.dumps(d["evidence_texts"]),
-                d["result"], d["retries"], d["max_retries"], d["updated_at"], d["id"],
+                json.dumps(d["unverified_claims"]), d["result"], d["retries"],
+                d["max_retries"], d["tokens_in"], d["tokens_out"],
+                d["updated_at"], d["id"],
             ),
         )
+
+
+def claim_task(task_id: str) -> dict | None:
+    """Atomically claim a PENDING/NEEDS_RETRY task for background execution.
+
+    The UPDATE ... WHERE status IN (...) is a single statement, so two
+    concurrent workers can't both claim the same task: the loser gets
+    rowcount 0 and this returns None. Returns the task dict if claimed.
+    """
+    with _connect() as conn:
+        cur = conn.execute(
+            """UPDATE tasks SET status='in_progress', updated_at=?
+               WHERE id=? AND status IN ('pending','needs_retry')""",
+            (_now(), task_id),
+        )
+        if cur.rowcount == 0:
+            return None
+        row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+    return _row_to_task_dict(row) if row else None

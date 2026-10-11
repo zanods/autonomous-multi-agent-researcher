@@ -43,6 +43,8 @@ class Task(BaseModel):
     result: str | None = None
     retries: int = 0
     max_retries: int = 2
+    tokens_in: int = 0
+    tokens_out: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

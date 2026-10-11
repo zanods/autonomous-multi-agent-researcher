@@ -89,3 +89,21 @@ def run_task(task_id: str, background: BackgroundTasks):
         raise HTTPException(404, "task not found")
     background.add_task(runner.run_task, task_id)
     return {"task_id": task_id, "status": "accepted"}
+
+
+@app.post("/goals/{goal_id}/run")
+def run_goal(goal_id: str, background: BackgroundTasks):
+    """Queue every pending task of a goal. Double-queueing is safe:
+    runner.run_task() atomically claims tasks, so already-running or
+    finished tasks are skipped."""
+    store.init_db()
+    if store.get_goal(goal_id) is None:
+        raise HTTPException(404, "goal not found")
+    queued = [
+        t["id"]
+        for t in store.list_tasks(goal_id)
+        if t["status"] in ("pending", "needs_retry")
+    ]
+    for tid in queued:
+        background.add_task(runner.run_task, tid)
+    return {"goal_id": goal_id, "queued": queued}

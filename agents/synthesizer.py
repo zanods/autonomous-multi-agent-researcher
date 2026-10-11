@@ -34,4 +34,14 @@ def synthesize(
     )
     if budget is not None:
         budget.record("synthesizer", out)
-    return message_text(out)
+    text = message_text(out)
+    if failed:
+        # Never let a confident report hide that some tasks failed
+        # verification — the reader must know what was excluded.
+        text += (
+            "\n\n## Verification gaps\n"
+            "The following research tasks could not be verified after retries "
+            "and were excluded from this report:\n"
+        )
+        text += "\n".join(f"- {t.title}" for t in failed)
+    return text
