@@ -177,8 +177,11 @@ def test_synthesizer_live_labels_failed_tasks(monkeypatch):
 
     class FakeLLM:
         def invoke(self, prompt):
-            assert "Good task" in prompt  # only verified tasks are synthesized
-            assert "Bad task" not in prompt
+            assert "Good task" in prompt  # verified task is source material
+            # failed task appears only as missing evidence, never as findings
+            assert "### Bad task" not in prompt
+            assert "Missing evidence" in prompt
+            assert "do not cover these topics" in prompt.lower()
             return type("Resp", (), {"content": "Synthesized report."})()
 
     monkeypatch.setattr(synthesizer, "get_llm", lambda: FakeLLM())
@@ -186,5 +189,20 @@ def test_synthesizer_live_labels_failed_tasks(monkeypatch):
                      status=TaskStatus.DONE)
     failed_task = Task(title="Bad task", status=TaskStatus.FAILED)
     report = synthesizer.synthesize("q", [done_task, failed_task], mock_mode=False)
+    assert "Verification gaps" in report
+    assert "Bad task" in report
+
+
+def test_synthesizer_live_no_verified_tasks_skips_llm(monkeypatch):
+    from agents import synthesizer
+    from models.task import Task, TaskStatus
+
+    def boom():
+        raise AssertionError("LLM must not be called with zero verified tasks")
+
+    monkeypatch.setattr(synthesizer, "get_llm", boom)
+    failed_task = Task(title="Bad task", status=TaskStatus.FAILED)
+    report = synthesizer.synthesize("q", [failed_task], mock_mode=False)
+    assert "no verified findings" in report
     assert "Verification gaps" in report
     assert "Bad task" in report
