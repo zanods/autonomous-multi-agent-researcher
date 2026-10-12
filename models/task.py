@@ -17,6 +17,19 @@ class TaskStatus(str, Enum):
     FAILED = "failed"
 
 
+class Claim(BaseModel):
+    """A single verifiable statement extracted from research notes.
+
+    `source` is the evidence reference (URL or "kb:<chunk_id>") that the
+    claim was drawn from / verified against. None means no supporting
+    evidence was found — such claims must never receive a citation.
+    """
+
+    text: str
+    source: str | None = None
+    verified: bool = False
+
+
 # Allowed status transitions. Anything else raises ValueError.
 _TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.PENDING: {TaskStatus.IN_PROGRESS, TaskStatus.FAILED},
@@ -39,6 +52,10 @@ class Task(BaseModel):
     assigned_agent: str = "researcher"
     evidence: list[str] = Field(default_factory=list)
     evidence_texts: list[str] = Field(default_factory=list)
+    # Per-claim provenance. Parallel to evidence_texts via Claim.source refs.
+    claims: list[Claim] = Field(default_factory=list)
+    # Evidence ref -> display title (page title or chunk id), for citations.
+    source_titles: dict[str, str] = Field(default_factory=dict)
     unverified_claims: list[str] = Field(default_factory=list)
     result: str | None = None
     retries: int = 0

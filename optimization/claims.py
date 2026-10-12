@@ -23,22 +23,49 @@ def _keywords(claim: str) -> set[str]:
 _NEGATIONS = re.compile(r"\b(no|not|never|without|cannot)\b|n't")
 
 
-def exact_match_verify(claim: str, evidence: list[str]) -> bool:
-    """True if every keyword of the claim appears inside a single evidence chunk.
+def _match_chunk(claim: str, evidence: list[str]) -> int | None:
+    """Index of the first evidence chunk covering the claim's keywords.
 
-    Pure string matching — costs zero LLM tokens. Strict on purpose: anything
-    it can't prove goes to stage 2 (LLM review).
+    Pure string matching — costs zero LLM tokens. Strict on purpose:
+    anything it can't prove goes to stage 2 (LLM review).
 
     Negated claims never auto-pass: stripping "not" would make
     "does not support X" look identical to "supports X".
     """
     if _NEGATIONS.search(claim.lower()):
-        return False
+        return None
     kws = _keywords(claim)
     if not kws:
-        return False
-    for ev in evidence:
+        return None
+    for i, ev in enumerate(evidence):
         ev_words = set(re.findall(r"[a-z0-9]+", ev.lower()))
         if kws <= ev_words:
-            return True
-    return False
+            return i
+    return None
+
+
+def exact_match_verify(claim: str, evidence: list[str]) -> bool:
+    """True if every keyword of the claim appears inside a single evidence chunk."""
+    return _match_chunk(claim, evidence) is not None
+
+
+def attach_claim_sources(
+    claims: list[str], evidence: list[tuple[str | None, str, str]]
+) -> list["Claim"]:
+    """Attach the best-matching evidence ref to each claim.
+
+    `evidence` is a list of (ref, title, text) triples — ref is a URL,
+    "kb:<chunk_id>", or None when unknown. The first chunk whose keywords
+    cover the claim's keywords wins; claims with no match (or a match on an
+    unknown ref) get source=None and must never be cited. Local import of
+    Claim avoids a models->optimization import cycle.
+    """
+    from models.task import Claim
+
+    texts = [t for _, _, t in evidence]
+    out = []
+    for c in claims:
+        idx = _match_chunk(c, texts)
+        src = evidence[idx][0] if idx is not None else None
+        out.append(Claim(text=c, source=src or None))
+    return out

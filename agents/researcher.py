@@ -5,6 +5,7 @@ import os
 from agents.llm import get_llm, message_text
 from models.task import Task
 from optimization.budget import TokenBudget
+from optimization.claims import attach_claim_sources, split_claims
 from rag.retriever import rag_search
 from tools.web_search import web_search
 
@@ -74,6 +75,40 @@ def research_task(
     if budget is not None:
         budget.record("researcher", notes)
     task.result = message_text(notes)
-    task.evidence = [h["url"] for h in web_hits if h.get("url")]
-    task.evidence += [f"kb:{h['id']}" for h in rag_hits]
+    # One ordered evidence list: (ref, title, text) with ref a URL,
+    # "kb:<chunk_id>", or None when unknown. task.evidence and
+    # task.evidence_texts stay parallel to it so the fact-checker can map a
+    # matched chunk back to its ref.
+    new_items: list[tuple[str | None, str, str]] = [
+        (f"kb:{h['id']}", str(h["id"]), t) for h, t in zip(rag_hits, rag_texts)
+    ]
+    new_items += [
+        (h.get("url") or None, h.get("title") or "web result", t)
+        for h, t in zip(web_hits, web_texts)
+    ]
+    if focus_claims:
+        # Retry: accumulate evidence items, don't discard what was already found.
+        old_texts = task.evidence_texts or []
+        old_refs = (
+            task.evidence
+            if len(task.evidence) == len(old_texts)
+            else [None] * len(old_texts)
+        )
+        old_titles = task.source_titles or {}
+        items: list[tuple[str | None, str, str]] = [
+            (
+                r if r and r != "unknown" else None,
+                old_titles.get(r, r or "unknown") if r else "unknown",
+                t,
+            )
+            for r, t in zip(old_refs, old_texts)
+        ]
+        seen = set(old_texts)
+        items += [it for it in new_items if it[2] not in seen]
+    else:
+        items = new_items
+    task.evidence = [ref or "unknown" for ref, _, _ in items]
+    task.evidence_texts = [t for _, _, t in items]
+    task.source_titles = {ref: title for ref, title, _ in items if ref}
+    task.claims = attach_claim_sources(split_claims(task.result or ""), items)
     return task
