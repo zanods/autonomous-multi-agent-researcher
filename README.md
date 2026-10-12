@@ -23,6 +23,10 @@ The system is built around **LangGraph**, **LangChain**, **Advanced RAG**, and *
 - **Eval Harness** (`eval/`): Trap queries (fabricated methods like FractalHash) plus normal queries, run programmatically with mocked LLMs — no quota burn. Metrics: trap-catch rate, verification precision, retry stability. Run with `python -m eval.run_eval`.
 - **Concurrent Execution**: Independent tasks run concurrently (asyncio + worker threads) in both the LangGraph pipeline and the API runner, with per-task retry caps preserved and atomic task claiming. The API emits per-task completion events (`GET /goals/{id}/events`) for the dashboard to poll.
 - **Auto-Language Output**: The report follows the query's language — a Vietnamese query gets a Vietnamese report (lightweight diacritics heuristic, no extra deps), including localized Sources and Verification-gaps sections.
+- **Adversarial verifier hardening**: exact-match never auto-passes claims against negated evidence ("X reduces temps" vs "X does not reduce temps"); contradictory sources route to LLM adjudication instead of cherry-pick auto-pass; the fact-checker prompt explicitly fails negations, unit changes, out-of-context quotes, and bogus citations. Eval trap categories cover all five.
+- **Fail-closed verification**: with no LLM configured, `verify_task` returns unverified (never "mock-verified") so live runs without API keys go to retry/FAILED instead of false VERIFIED.
+- **CI**: `.github/workflows/ci.yml` runs the mock-only pytest suite on push/PR (Python 3.12); no API keys required.
+- **Eval mode separation**: eval summaries carry `mode: "mock"` (logged as `eval-mock-*.json`); live-verification rates are tracked separately and never merged into mock numbers.
 - **Tool Integration via MCP**: Designed to integrate Model Context Protocol (MCP) servers and external function tools.
 - **Structured Task Management**: Agent tasks are represented with validated schemas and tracked through explicit workflow states.
 

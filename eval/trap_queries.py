@@ -6,7 +6,8 @@ must never verify fabricated claims.
 
 Each scenario:
   id        unique slug
-  kind      "trap" (must FAIL) or "normal" (must verify)
+  kind      "trap" (must FAIL) or "normal" (must verify) or "adversarial"
+            (must FAIL — verifier stress cases)
   query     research question fed to the workflow
   tasks     [(title, description)] the mocked planner returns
   notes     research notes the mocked researcher returns every attempt
@@ -101,5 +102,139 @@ SCENARIOS: list[dict] = [
             ),
         ],
         "checker": "pass_all",
+    },
+    # --- Adversarial verifier stress cases: all must FAIL. ---
+    {
+        # (a) Negated claim: says the opposite of the evidence. The claim
+        # negation guard blocks exact-match; the LLM stage must FAIL it.
+        "id": "trap-negation",
+        "kind": "adversarial",
+        "query": "Do vapor chambers spread heat laterally?",
+        "tasks": [
+            (
+                "Vapor chamber negation check",
+                "Verify the lateral heat spreading claim.",
+            )
+        ],
+        "notes": (
+            "Vapor chambers do not spread heat laterally across heatsinks."
+        ),
+        "evidence": [
+            (
+                "https://en.wikipedia.org/wiki/Vapor_chamber",
+                "Vapor chamber",
+                "Vapor chambers spread heat laterally across heatsinks.",
+            ),
+        ],
+        "checker": "fail_all",
+    },
+    {
+        # (b) Changed units: 5°C of evidence becomes 5°F in the claim.
+        # "fahrenheit" matches no evidence keyword, so it must FAIL.
+        "id": "trap-units",
+        "kind": "adversarial",
+        "query": "What temperature drop do graphene pads achieve?",
+        "tasks": [
+            (
+                "Graphene pad units check",
+                "Verify the temperature drop figure.",
+            )
+        ],
+        "notes": (
+            "Graphene pads achieve a temperature drop of 5 degrees "
+            "Fahrenheit in testing."
+        ),
+        "evidence": [
+            (
+                "https://example.com/pads",
+                "Pad review",
+                "Graphene pads achieve a temperature drop of 5 degrees "
+                "Celsius in testing.",
+            ),
+        ],
+        "checker": "fail_all",
+    },
+    {
+        # (c) Half-sentence quote: "effective" is lifted out of a sentence
+        # whose actual verdict is "ineffective without proper airflow".
+        "id": "trap-halfquote",
+        "kind": "adversarial",
+        "query": "Are vapor chambers effective?",
+        "tasks": [
+            (
+                "Vapor chamber effectiveness",
+                "Verify the effectiveness claim.",
+            )
+        ],
+        "notes": "The study found vapor chambers effective.",
+        "evidence": [
+            (
+                "https://example.com/study",
+                "Cooling study",
+                "The study found vapor chambers ineffective without proper "
+                "airflow.",
+            ),
+        ],
+        "checker": "fail_all",
+    },
+    {
+        # (d) Contradictory sources: the claim matches one chunk while
+        # another credible chunk denies it — cherry-picking must not pass.
+        # Both sources score above the low-credibility bar on purpose, so
+        # this exercises contradiction routing, not the weak-source rule.
+        "id": "trap-contradiction",
+        "kind": "adversarial",
+        "query": "Do vapor chambers reduce temperatures by 15 degrees?",
+        "tasks": [
+            (
+                "Contradictory evidence check",
+                "Verify against disagreeing sources.",
+            )
+        ],
+        "notes": (
+            "Vapor chambers reduce temperatures by 15 degrees Celsius."
+        ),
+        "evidence": [
+            (
+                "https://www.intel.com/vapor-chamber-whitepaper",
+                "Intel whitepaper",
+                "Vapor chambers reduce temperatures by 15 degrees Celsius "
+                "according to vendor tests.",
+            ),
+            (
+                "https://www.tomshardware.com/vapor-chamber-test",
+                "Tom's Hardware",
+                "Independent tests show vapor chambers do not reduce "
+                "temperatures significantly.",
+            ),
+        ],
+        "checker": "fail_all",
+    },
+    {
+        # (e) Non-existent citation: the claim leans on source [7], which was
+        # never retrieved. Keyword matching ignores the bogus marker; the
+        # claim fails for lack of evidence.
+        "id": "trap-bogus-citation",
+        "kind": "adversarial",
+        "query": "What do studies say about vapor chamber cooling?",
+        "tasks": [
+            (
+                "Bogus citation check",
+                "Verify the cited study claim.",
+            )
+        ],
+        "notes": (
+            "A 2024 landmark study [7] proves vapor chambers cool 50 "
+            "degrees in all cases."
+        ),
+        "evidence": [
+            (
+                "https://en.wikipedia.org/wiki/Vapor_chamber",
+                "Vapor chamber",
+                "Vapor chambers are heat spreading devices used in "
+                "electronics cooling.",
+            ),
+        ],
+        "checker": "fail_all",
     },
 ]

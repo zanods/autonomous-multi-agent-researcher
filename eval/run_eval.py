@@ -1,11 +1,16 @@
 """Programmatic eval runner: drives the pipeline with mocked LLMs (no quota
 burn) and computes three metrics:
 
-  trap_catch_rate        % of trap scenarios whose tasks correctly FAILED
-                         after retries (fabricated claims never verified)
+  trap_catch_rate        % of trap/adversarial scenarios whose tasks correctly
+                         FAILED after retries (fabricated or adversarial claims
+                         never verified)
   verification_precision % of "verified" claims that carry a cited source
   retry_stability_rate   % of scenarios where per-retry claim counts never
                          grow (no 27->34 style bloat)
+
+MODE SEPARATION: this runner always reports mode="mock". Mock-pass rates must
+never be mixed with live-verification rates — live runs log separately (see
+run_scenarios) and are reported as their own numbers.
 
 Runnable:  python -m eval.run_eval
 """
@@ -41,6 +46,9 @@ class ScenarioResult:
 
 @dataclass
 class EvalSummary:
+    # "mock": this runner (mocked LLMs). Live-verification runs must use a
+    # separate summary object/file (mode="live") — never merge the two.
+    mode: str
     trap_catch_rate: float | None
     verification_precision: float | None
     retry_stability_rate: float
@@ -153,7 +161,7 @@ def run_scenario(scenario: dict) -> ScenarioResult:
     )
 
     trap_caught = None
-    if scenario["kind"] == "trap":
+    if scenario["kind"] in ("trap", "adversarial"):
         trap_caught = bool(tasks) and len(failed) == len(tasks)
 
     return ScenarioResult(
@@ -171,7 +179,7 @@ def run_scenario(scenario: dict) -> ScenarioResult:
 
 
 def summarize(results: list[ScenarioResult]) -> EvalSummary:
-    traps = [r for r in results if r.kind == "trap"]
+    traps = [r for r in results if r.kind in ("trap", "adversarial")]
     trap_rate = (
         sum(1 for r in traps if r.trap_caught) / len(traps) if traps else None
     )
@@ -182,6 +190,7 @@ def summarize(results: list[ScenarioResult]) -> EvalSummary:
         sum(1 for r in results if r.retry_stable) / len(results) if results else 1.0
     )
     return EvalSummary(
+        mode="mock",
         trap_catch_rate=trap_rate,
         verification_precision=precision,
         retry_stability_rate=stability,
@@ -192,13 +201,18 @@ def summarize(results: list[ScenarioResult]) -> EvalSummary:
 def run_scenarios(
     scenarios: list[dict], results_dir: str | None = None
 ) -> EvalSummary:
-    """Run scenarios and optionally log the JSON summary to results_dir."""
+    """Run scenarios and optionally log the JSON summary to results_dir.
+
+    Mock results are written as eval-mock-<stamp>.json. Live-verification
+    results must be logged as eval-live-<stamp>.json by the live runner and
+    never merged into the mock numbers.
+    """
     results = [run_scenario(s) for s in scenarios]
     summary = summarize(results)
     if results_dir:
         os.makedirs(results_dir, exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        path = os.path.join(results_dir, f"eval-{stamp}.json")
+        path = os.path.join(results_dir, f"eval-{summary.mode}-{stamp}.json")
         with open(path, "w") as f:
             json.dump(asdict(summary), f, indent=2)
         print(f"results -> {path}")
@@ -208,6 +222,7 @@ def run_scenarios(
 def main() -> None:
     results_dir = os.path.join(os.path.dirname(__file__), "results")
     summary = run_scenarios(SCENARIOS, results_dir=results_dir)
+    print(f"mode: {summary.mode} (mocked LLMs — NOT live verification rates)")
     print(f"{'scenario':<22}{'kind':<8}{'done':<6}{'failed':<8}{'trap?':<7}{'stable'}")
     for r in summary.scenarios:
         print(

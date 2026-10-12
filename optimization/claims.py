@@ -23,15 +23,29 @@ def _keywords(claim: str) -> set[str]:
 _NEGATIONS = re.compile(r"\b(no|not|never|without|cannot)\b|n't")
 
 
-def _chunk_covers(claim: str, text: str) -> bool:
-    """True if every keyword of the claim appears inside this one chunk."""
-    if _NEGATIONS.search(claim.lower()):
-        return False
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def _keyword_cover(claim: str, text: str) -> bool:
+    """Pure keyword-subset check, ignoring negation — the raw signal used
+    by contradiction detection."""
     kws = _keywords(claim)
-    if not kws:
+    return bool(kws) and kws <= _words(text)
+
+
+def _chunk_covers(claim: str, text: str) -> bool:
+    """Auto-pass gate: keyword cover with no negation anywhere.
+
+    Negation in the CLAIM ("does not reduce") or in the EVIDENCE chunk
+    ("does not reduce") makes keyword matching ambiguous — "X reduces temps"
+    would otherwise auto-pass against "X does not reduce temps". Those go
+    to LLM review instead. Strict on purpose: anything string matching
+    can't prove goes to stage 2.
+    """
+    if _NEGATIONS.search(claim.lower()) or _NEGATIONS.search(text.lower()):
         return False
-    ev_words = set(re.findall(r"[a-z0-9]+", text.lower()))
-    return kws <= ev_words
+    return _keyword_cover(claim, text)
 
 
 def _match_chunk(claim: str, evidence: list[str]) -> int | None:
@@ -44,6 +58,36 @@ def _match_chunk(claim: str, evidence: list[str]) -> int | None:
         if _chunk_covers(claim, ev):
             return i
     return None
+
+
+_CONTRAST = re.compile(
+    r"\b(but|however|although|though|whereas|while|despite|in contrast|"
+    r"on the other hand|contrary to)\b",
+    re.IGNORECASE,
+)
+
+
+def _contradicted(claim: str, evidence: list[str]) -> bool:
+    """True if the evidence disagrees with itself about the claim.
+
+    Some chunk fully covers the claim's keywords (a would-be auto-pass)
+    while another chunk covers at least half of them AND carries a negation
+    or contrast marker — the claim is cherry-picked from disagreeing
+    sources and must not pass on keyword matching alone. Routed to LLM
+    review instead, which can adjudicate.
+    """
+    kws = _keywords(claim)
+    if not kws:
+        return False
+    if not any(_keyword_cover(claim, t) for t in evidence):
+        return False  # nothing fully covers it — nothing to cherry-pick
+    for t in evidence:
+        if _keyword_cover(claim, t):
+            continue
+        overlap = len(kws & _words(t)) / len(kws)
+        if overlap >= 0.5 and (_NEGATIONS.search(t.lower()) or _CONTRAST.search(t.lower())):
+            return True
+    return False
 
 
 def exact_match_verify(claim: str, evidence: list[str]) -> bool:

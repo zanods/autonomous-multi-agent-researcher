@@ -7,7 +7,13 @@ from agents.llm import get_llm, message_text
 from agents.source_scorer import LOW_CREDIBILITY
 from models.task import Claim, Task
 from optimization.budget import TokenBudget
-from optimization.claims import _chunk_covers, _match_chunk, exact_match_verify, split_claims
+from optimization.claims import (
+    _chunk_covers,
+    _contradicted,
+    _match_chunk,
+    exact_match_verify,
+    split_claims,
+)
 
 # Re-exported for backward compatibility (tests patch fc_mod.exact_match_verify).
 __all__ = ["verify_task", "exact_match_verify"]
@@ -107,7 +113,14 @@ def _verify_staged(
             # fail), skipping LLM review entirely to save tokens.
             weak.append(claim)
             continue
-        idx = _match_chunk(claim.text, texts)
+        idx = None
+        if _contradicted(claim.text, texts):
+            # Disagreeing evidence: one chunk supports the claim while
+            # another contradicts it. Never auto-pass on keyword matching
+            # alone (that would bless cherry-picking) — the LLM adjudicates.
+            need_llm.append(claim)
+        else:
+            idx = _match_chunk(claim.text, texts)
         if idx is not None:
             # Exact match: the matched chunk is the authoritative source —
             # prefer it over the researcher's looser attachment. "unknown"
@@ -127,6 +140,10 @@ def _verify_staged(
         prompt = (
             "Fact-check each numbered claim against the evidence snippets below. "
             "Reply with exactly one line per claim: '<n>. PASS' or '<n>. FAIL'.\n"
+            "A claim FAILs if it states the opposite of the evidence (negation "
+            "or inverted meaning), changes units or numbers from the evidence, "
+            "quotes evidence out of context, or relies on a source that was "
+            "never provided.\n"
             + "\n".join(f"{i + 1}. {c.text}" for i, c in enumerate(need_llm))
             + f"\nEvidence:\n{snippets}"
         )
