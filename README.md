@@ -21,6 +21,7 @@ The system is built around **LangGraph**, **LangChain**, **Advanced RAG**, and *
 - **Inline Citations**: Every verified claim carries its source (URL or knowledge-base chunk). Reports render `[1]`, `[2]` markers mapped to a numbered Sources section; claims without a source are never cited.
 - **Source Credibility Scoring**: Heuristic 0–1 trust score per evidence source (academic > vendor docs > local KB > tech press > blogs). Claims supported only by sub-threshold sources cannot verify — they go back to narrowed retry instead of passing on weak evidence.
 - **Eval Harness** (`eval/`): Trap queries (fabricated methods like FractalHash) plus normal queries, run programmatically with mocked LLMs — no quota burn. Metrics: trap-catch rate, verification precision, retry stability. Run with `python -m eval.run_eval`.
+- **Concurrent Execution**: Independent tasks run concurrently (asyncio + worker threads) in both the LangGraph pipeline and the API runner, with per-task retry caps preserved and atomic task claiming. The API emits per-task completion events (`GET /goals/{id}/events`) for the dashboard to poll.
 - **Tool Integration via MCP**: Designed to integrate Model Context Protocol (MCP) servers and external function tools.
 - **Structured Task Management**: Agent tasks are represented with validated schemas and tracked through explicit workflow states.
 

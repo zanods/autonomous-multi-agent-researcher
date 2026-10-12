@@ -14,7 +14,9 @@ def _db_path() -> str:
 
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(_db_path())
+    # Generous busy timeout: concurrent task threads serialize on short
+    # single-statement writes instead of failing with "database is locked".
+    conn = sqlite3.connect(_db_path(), timeout=30.0)
     conn.row_factory = sqlite3.Row
     return conn
 
