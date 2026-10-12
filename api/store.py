@@ -14,7 +14,9 @@ def _db_path() -> str:
 
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(_db_path())
+    # Generous busy timeout: concurrent task threads serialize on short
+    # single-statement writes instead of failing with "database is locked".
+    conn = sqlite3.connect(_db_path(), timeout=30.0)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -58,6 +60,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("unverified_claims", "TEXT DEFAULT '[]'"),
         ("tokens_in", "INTEGER DEFAULT 0"),
         ("tokens_out", "INTEGER DEFAULT 0"),
+        ("claims", "TEXT DEFAULT '[]'"),
+        ("source_titles", "TEXT DEFAULT '{}'"),
+        ("evidence_credibility", "TEXT DEFAULT '{}'"),
     ):
         if name not in cols:
             conn.execute(f"ALTER TABLE tasks ADD COLUMN {name} {ddl}")
@@ -94,14 +99,17 @@ def create_task(goal_id: str, task: Task) -> None:
             """INSERT INTO tasks
                (id, goal_id, title, description, status, assigned_agent,
                 evidence, evidence_texts, unverified_claims, result, retries,
-                max_retries, tokens_in, tokens_out, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                max_retries, tokens_in, tokens_out, claims, source_titles,
+                evidence_credibility, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 d["id"], goal_id, d["title"], d["description"], d["status"],
                 d["assigned_agent"], json.dumps(d["evidence"]),
                 json.dumps(d["evidence_texts"]),
                 json.dumps(d["unverified_claims"]), d["result"], d["retries"],
                 d["max_retries"], d["tokens_in"], d["tokens_out"],
+                json.dumps(d["claims"]), json.dumps(d["source_titles"]),
+                json.dumps(d["evidence_credibility"]),
                 d["created_at"], d["updated_at"],
             ),
         )
@@ -112,6 +120,9 @@ def _row_to_task_dict(row: sqlite3.Row) -> dict:
     d["evidence"] = json.loads(d["evidence"] or "[]")
     d["evidence_texts"] = json.loads(d["evidence_texts"] or "[]")
     d["unverified_claims"] = json.loads(d["unverified_claims"] or "[]")
+    d["claims"] = json.loads(d.get("claims") or "[]")
+    d["source_titles"] = json.loads(d.get("source_titles") or "{}")
+    d["evidence_credibility"] = json.loads(d.get("evidence_credibility") or "{}")
     d["tokens_in"] = int(d["tokens_in"] or 0)
     d["tokens_out"] = int(d["tokens_out"] or 0)
     return d
@@ -141,12 +152,14 @@ def save_task(task: Task) -> None:
             """UPDATE tasks SET title=?, description=?, status=?, assigned_agent=?,
                 evidence=?, evidence_texts=?, unverified_claims=?, result=?,
                 retries=?, max_retries=?, tokens_in=?, tokens_out=?,
-                updated_at=? WHERE id=?""",
+                claims=?, source_titles=?, evidence_credibility=?, updated_at=? WHERE id=?""",
             (
                 d["title"], d["description"], d["status"], d["assigned_agent"],
                 json.dumps(d["evidence"]), json.dumps(d["evidence_texts"]),
                 json.dumps(d["unverified_claims"]), d["result"], d["retries"],
                 d["max_retries"], d["tokens_in"], d["tokens_out"],
+                json.dumps(d["claims"]), json.dumps(d["source_titles"]),
+                json.dumps(d["evidence_credibility"]),
                 d["updated_at"], d["id"],
             ),
         )

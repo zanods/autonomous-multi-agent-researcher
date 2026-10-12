@@ -93,9 +93,9 @@ def run_task(task_id: str, background: BackgroundTasks):
 
 @app.post("/goals/{goal_id}/run")
 def run_goal(goal_id: str, background: BackgroundTasks):
-    """Queue every pending task of a goal. Double-queueing is safe:
-    runner.run_task() atomically claims tasks, so already-running or
-    finished tasks are skipped."""
+    """Run every pending task of a goal concurrently. Double-queueing is safe:
+    runner.run_all_tasks() claims each task with one atomic UPDATE, so an
+    already-running or finished task is skipped by the loser of the race."""
     store.init_db()
     if store.get_goal(goal_id) is None:
         raise HTTPException(404, "goal not found")
@@ -104,6 +104,14 @@ def run_goal(goal_id: str, background: BackgroundTasks):
         for t in store.list_tasks(goal_id)
         if t["status"] in ("pending", "needs_retry")
     ]
-    for tid in queued:
-        background.add_task(runner.run_task, tid)
+    background.add_task(runner.run_all_tasks, goal_id)
     return {"goal_id": goal_id, "queued": queued}
+
+
+@app.get("/goals/{goal_id}/events")
+def task_events(goal_id: str):
+    """Per-task completion events (task granularity) for the dashboard to poll."""
+    store.init_db()
+    if store.get_goal(goal_id) is None:
+        raise HTTPException(404, "goal not found")
+    return runner.get_events(goal_id)

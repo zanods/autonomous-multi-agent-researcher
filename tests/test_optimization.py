@@ -47,6 +47,21 @@ def test_verify_mock_unchanged():
     assert ok and note == "mock-verified"
 
 
+def test_verify_no_llm_fails_closed(monkeypatch):
+    """Regression: mock_mode=False with no LLM configured must NOT verify.
+
+    Fail-open (returning True) would mark every claim 'verified' without
+    any verification on a live run without API keys.
+    """
+    import agents.fact_checker as fc_mod
+
+    t = Task(title="Sample task", result="Some notes here that are long enough.")
+    monkeypatch.setattr(fc_mod, "get_llm", lambda: None)
+    ok, note, _failed = fc_mod.verify_task(t, mock_mode=False)
+    assert ok is False
+    assert "no LLM configured" in note
+
+
 def test_cost_estimate_non_negative():
     b = TokenBudget()
     b.spend("researcher", "hello world")

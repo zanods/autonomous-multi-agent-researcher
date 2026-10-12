@@ -4,9 +4,19 @@ import os
 import re
 
 from agents.llm import get_llm, message_text
-from models.task import Task
+from agents.source_scorer import LOW_CREDIBILITY
+from models.task import Claim, Task
 from optimization.budget import TokenBudget
-from optimization.claims import exact_match_verify, split_claims
+from optimization.claims import (
+    _chunk_covers,
+    _contradicted,
+    _match_chunk,
+    exact_match_verify,
+    split_claims,
+)
+
+# Re-exported for backward compatibility (tests patch fc_mod.exact_match_verify).
+__all__ = ["verify_task", "exact_match_verify"]
 
 OPTIMIZE = os.getenv("OPTIMIZE_TOKENS", "1") == "1"
 
@@ -35,7 +45,9 @@ def verify_task(
         return True, "mock-verified", []
     llm = get_llm()
     if llm is None:
-        return True, "mock-verified (no LLM configured)", []
+        # Fail CLOSED: a live run without a configured LLM must never mark
+        # claims verified. The task goes to retry/FAILED, never VERIFIED.
+        return False, "no LLM configured — cannot verify", []
     if optimize:
         return _verify_staged(task, llm, budget)
     return _verify_whole(task, llm, budget)
@@ -58,14 +70,67 @@ def _verify_whole(
 def _verify_staged(
     task: Task, llm, budget: TokenBudget | None = None
 ) -> tuple[bool, str]:
-    claims = split_claims(task.result or "")
+    # Prefer researcher-attached claims (they carry source refs); fall back
+    # to splitting raw notes for tasks built without the researcher.
+    claims: list[Claim] = (
+        task.claims
+        if task.claims
+        else [Claim(text=c) for c in split_claims(task.result or "")]
+    )
     if not claims:
         return False, "staged: no verifiable claims extracted", []
     texts = task.evidence_texts or []
+    refs = (
+        task.evidence
+        if len(task.evidence) == len(texts)
+        else [None] * len(texts)
+    )
+    cred = task.evidence_credibility or {}
 
-    auto_ok, need_llm = [], []
+    def _best_credibility(claim_text: str) -> float | None:
+        """Best credibility among scored chunks covering the claim's keywords.
+
+        Returns None when no scored chunk covers it — no data means no
+        penalty (legacy/manual tasks without researcher-attached scores keep
+        the old behavior).
+        """
+        best: float | None = None
+        for i, t in enumerate(texts):
+            if not _chunk_covers(claim_text, t):
+                continue
+            s = cred.get(refs[i]) if refs[i] else None
+            if s is not None and (best is None or s > best):
+                best = s
+        return best
+
+    auto_ok, need_llm, weak = [], [], []
     for claim in claims:
-        (auto_ok if exact_match_verify(claim, texts) else need_llm).append(claim)
+        best = _best_credibility(claim.text)
+        if best is not None and best < LOW_CREDIBILITY:
+            # Weakly sourced: every supporting chunk scores below the bar, so
+            # this claim must not pass on this evidence — not even via the
+            # LLM stage. It goes to failed_claims (narrowed retry or terminal
+            # fail), skipping LLM review entirely to save tokens.
+            weak.append(claim)
+            continue
+        idx = None
+        if _contradicted(claim.text, texts):
+            # Disagreeing evidence: one chunk supports the claim while
+            # another contradicts it. Never auto-pass on keyword matching
+            # alone (that would bless cherry-picking) — the LLM adjudicates.
+            need_llm.append(claim)
+        else:
+            idx = _match_chunk(claim.text, texts)
+        if idx is not None:
+            # Exact match: the matched chunk is the authoritative source —
+            # prefer it over the researcher's looser attachment. "unknown"
+            # is a display placeholder, never a citable source.
+            if refs[idx] not in (None, "unknown"):
+                claim.source = refs[idx]
+            claim.verified = True
+            auto_ok.append(claim)
+        else:
+            need_llm.append(claim)
 
     llm_ok, llm_bad = [], []
     if need_llm:
@@ -75,7 +140,11 @@ def _verify_staged(
         prompt = (
             "Fact-check each numbered claim against the evidence snippets below. "
             "Reply with exactly one line per claim: '<n>. PASS' or '<n>. FAIL'.\n"
-            + "\n".join(f"{i + 1}. {c}" for i, c in enumerate(need_llm))
+            "A claim FAILs if it states the opposite of the evidence (negation "
+            "or inverted meaning), changes units or numbers from the evidence, "
+            "quotes evidence out of context, or relies on a source that was "
+            "never provided.\n"
+            + "\n".join(f"{i + 1}. {c.text}" for i, c in enumerate(need_llm))
             + f"\nEvidence:\n{snippets}"
         )
         out = llm.invoke(prompt)
@@ -83,19 +152,32 @@ def _verify_staged(
             budget.record("fact_checker", out)
         text = message_text(out)
         for i, line in enumerate(text.strip().splitlines()):
-            target = need_llm[i] if i < len(need_llm) else line
+            target = need_llm[i] if i < len(need_llm) else None
             m = _VERDICT.match(line)
-            (llm_ok if m and m.group(1).upper() == "PASS" else llm_bad).append(target)
+            if target is None:
+                continue
+            if m and m.group(1).upper() == "PASS":
+                target.verified = True  # keep researcher's attached source
+                llm_ok.append(target)
+            else:
+                llm_bad.append(target)
 
     total_ok = len(auto_ok) + len(llm_ok)
     note = (
         f"staged: {total_ok}/{len(claims)} claims verified "
-        f"({len(auto_ok)} exact-match, {len(llm_ok)} LLM-verified, {len(llm_bad)} failed)"
+        f"({len(auto_ok)} exact-match, {len(llm_ok)} LLM-verified, "
+        f"{len(llm_bad)} failed, {len(weak)} weakly-sourced)"
     )
-    # Failed = explicit FAILs + claims the LLM never judged (short/garbled
-    # reply). Identity-based: the lists hold the same objects as `claims`.
+    # Failed = weakly-sourced + explicit FAILs + claims the LLM never judged
+    # (short/garbled reply). Identity-based: the lists hold the same objects
+    # as `claims`.
     judged = set(map(id, llm_ok)) | set(map(id, llm_bad))
-    failed = list(llm_bad) + [c for c in need_llm if id(c) not in judged]
+    failed = list(weak) + list(llm_bad) + [c for c in need_llm if id(c) not in judged]
     # Every claim must be verified — an empty/garbled LLM reply verifies
     # nothing, so it must not pass vacuously.
-    return total_ok == len(claims), note, failed
+    task.claims = claims
+    return (
+        total_ok == len(claims),
+        note,
+        [c.text for c in failed],
+    )
