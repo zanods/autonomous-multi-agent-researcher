@@ -39,7 +39,9 @@ def verify_task(
         return True, "mock-verified", []
     llm = get_llm()
     if llm is None:
-        return True, "mock-verified (no LLM configured)", []
+        # Fail CLOSED: a live run without a configured LLM must never mark
+        # claims verified. The task goes to retry/FAILED, never VERIFIED.
+        return False, "no LLM configured — cannot verify", []
     if optimize:
         return _verify_staged(task, llm, budget)
     return _verify_whole(task, llm, budget)
