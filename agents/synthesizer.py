@@ -3,6 +3,40 @@ from __future__ import annotations
 from agents.llm import get_llm, message_text
 from models.task import Claim, Task, TaskStatus
 from optimization.budget import TokenBudget
+from optimization.language import detect_language
+
+# Fixed report strings per detected query language. The report always
+# follows the query's language — no manual language option.
+_STRINGS = {
+    "en": {
+        "no_verified": (
+            "No research tasks could be verified after retries, so this "
+            "report contains no verified findings.\n"
+        ),
+        "gaps_title": "Verification gaps",
+        "gaps_intro": (
+            "The following research tasks could not be verified after "
+            "retries and were excluded from this report:\n"
+        ),
+        "gaps_mock": "Gaps (needs human review)",
+        "sources_title": "Sources",
+        "report_instruction": "Write the entire report in English.",
+    },
+    "vi": {
+        "no_verified": (
+            "Không có task nghiên cứu nào được kiểm chứng sau các lần thử "
+            "lại, vì vậy báo cáo này không chứa phát hiện đã kiểm chứng nào.\n"
+        ),
+        "gaps_title": "Khoảng trống kiểm chứng",
+        "gaps_intro": (
+            "Các task nghiên cứu sau không thể kiểm chứng sau các lần thử "
+            "lại và đã bị loại khỏi báo cáo này:\n"
+        ),
+        "gaps_mock": "Khoảng trống (cần người kiểm tra lại)",
+        "sources_title": "Nguồn",
+        "report_instruction": "Viết toàn bộ báo cáo bằng tiếng Việt.",
+    },
+}
 
 
 def build_citation_map(tasks: list[Task]) -> tuple[dict[str, int], dict[str, str]]:
@@ -21,8 +55,10 @@ def build_citation_map(tasks: list[Task]) -> tuple[dict[str, int], dict[str, str
     return numbers, titles
 
 
-def _sources_section(numbers: dict[str, int], titles: dict[str, str]) -> str:
-    lines = ["## Sources"]
+def _sources_section(
+    numbers: dict[str, int], titles: dict[str, str], lang: str = "en"
+) -> str:
+    lines = [f"## {_STRINGS[lang]['sources_title']}"]
     for ref, n in sorted(numbers.items(), key=lambda kv: kv[1]):
         lines.append(f"[{n}] {titles[ref]} — {ref}")
     return "\n".join(lines)
@@ -36,6 +72,8 @@ def synthesize(
 ) -> str:
     done = [t for t in tasks if t.status == TaskStatus.DONE]
     failed = [t for t in tasks if t.status == TaskStatus.FAILED]
+    lang = detect_language(query)
+    s = _STRINGS[lang]
 
     if not done:
         # Nothing verified: do not let the LLM write a report from its own
@@ -43,14 +81,12 @@ def synthesize(
         text = (
             "# Research Report\n\n"
             f"**Query:** {query}\n\n"
-            "No research tasks could be verified after retries, so this "
-            "report contains no verified findings.\n"
+            + s["no_verified"]
         )
         if failed:
             text += (
-                "\n## Verification gaps\n"
-                "The following research tasks could not be verified after "
-                "retries and were excluded from this report:\n"
+                f"\n## {s['gaps_title']}\n"
+                + s["gaps_intro"]
             )
             text += "\n".join(f"- {t.title}" for t in failed)
         return text
@@ -72,9 +108,9 @@ def synthesize(
                 lines.append(f"{t.result}\n")
                 lines.extend(f"- {e}" for e in t.evidence)
         if numbers:
-            lines.append("\n" + _sources_section(numbers, titles))
+            lines.append("\n" + _sources_section(numbers, titles, lang))
         if failed:
-            lines.append("\n## Gaps (needs human review)")
+            lines.append(f"\n## {s['gaps_mock']}")
             lines.extend(f"- {t.title}" for t in failed)
         return "\n".join(lines)
 
@@ -92,9 +128,12 @@ def synthesize(
             parts.append(t.result or "")
         sections.append("\n".join(parts))
     sections_text = "\n\n".join(sections)
-    sources_text = _sources_section(numbers, titles) if numbers else "(no cited sources)"
+    sources_text = (
+        _sources_section(numbers, titles, lang) if numbers else "(no cited sources)"
+    )
     missing = "\n".join(f"- {t.title}" for t in failed)
     out = llm.invoke(
+        s["report_instruction"] + "\n"
         "Synthesize ONLY the verified findings below into a structured "
         "analytical report with citations.\n"
         "STRICT RULES:\n"
@@ -110,11 +149,11 @@ def synthesize(
         "renumber, and do NOT invent citation numbers.\n"
         "- Findings without a citation number have no verified source: "
         "state them without any citation.\n"
-        "- End the report with a '## Sources' section listing every "
-        "citation number with its title and URL, in numeric order.\n"
+        f"- End the report with a '## {s['sources_title']}' section listing "
+        "every citation number with its title and URL, in numeric order.\n"
         f"Query: {query}\n\n"
         f"Verified findings (with citation numbers):\n{sections_text}\n\n"
-        f"Sources (use these titles/URLs in the '## Sources' section):\n{sources_text}\n\n"
+        f"Sources (use these titles/URLs in the '## {s['sources_title']}' section):\n{sources_text}\n\n"
         f"Missing evidence (do not cover these topics):\n{missing if missing else '(none)'}"
     )
     if budget is not None:
@@ -124,9 +163,8 @@ def synthesize(
         # Never let a confident report hide that some tasks failed
         # verification — the reader must know what was excluded.
         text += (
-            "\n\n## Verification gaps\n"
-            "The following research tasks could not be verified after retries "
-            "and were excluded from this report:\n"
+            f"\n\n## {s['gaps_title']}\n"
+            + s["gaps_intro"]
         )
         text += "\n".join(f"- {t.title}" for t in failed)
     return text
