@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from agents.llm import get_llm, message_text
+from agents.source_scorer import score_source
 from models.task import Task
 from optimization.budget import TokenBudget
 from optimization.claims import attach_claim_sources, split_claims
@@ -110,5 +111,8 @@ def research_task(
     task.evidence = [ref or "unknown" for ref, _, _ in items]
     task.evidence_texts = [t for _, _, t in items]
     task.source_titles = {ref: title for ref, title, _ in items if ref}
+    task.evidence_credibility = {
+        ref: score_source(ref, title) for ref, title, _ in items if ref
+    }
     task.claims = attach_claim_sources(split_claims(task.result or ""), items)
     return task

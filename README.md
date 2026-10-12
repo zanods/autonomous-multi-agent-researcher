@@ -19,6 +19,7 @@ The system is built around **LangGraph**, **LangChain**, **Advanced RAG**, and *
   - `Fact-Checker Agent`: Validates retrieved evidence and checks citations against source material.
   - `Synthesis Agent`: Combines verified findings into a structured analytical report.
 - **Inline Citations**: Every verified claim carries its source (URL or knowledge-base chunk). Reports render `[1]`, `[2]` markers mapped to a numbered Sources section; claims without a source are never cited.
+- **Source Credibility Scoring**: Heuristic 0–1 trust score per evidence source (academic > vendor docs > local KB > tech press > blogs). Claims supported only by sub-threshold sources cannot verify — they go back to narrowed retry instead of passing on weak evidence.
 - **Tool Integration via MCP**: Designed to integrate Model Context Protocol (MCP) servers and external function tools.
 - **Structured Task Management**: Agent tasks are represented with validated schemas and tracked through explicit workflow states.
 

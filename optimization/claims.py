@@ -23,23 +23,25 @@ def _keywords(claim: str) -> set[str]:
 _NEGATIONS = re.compile(r"\b(no|not|never|without|cannot)\b|n't")
 
 
+def _chunk_covers(claim: str, text: str) -> bool:
+    """True if every keyword of the claim appears inside this one chunk."""
+    if _NEGATIONS.search(claim.lower()):
+        return False
+    kws = _keywords(claim)
+    if not kws:
+        return False
+    ev_words = set(re.findall(r"[a-z0-9]+", text.lower()))
+    return kws <= ev_words
+
+
 def _match_chunk(claim: str, evidence: list[str]) -> int | None:
     """Index of the first evidence chunk covering the claim's keywords.
 
     Pure string matching — costs zero LLM tokens. Strict on purpose:
     anything it can't prove goes to stage 2 (LLM review).
-
-    Negated claims never auto-pass: stripping "not" would make
-    "does not support X" look identical to "supports X".
     """
-    if _NEGATIONS.search(claim.lower()):
-        return None
-    kws = _keywords(claim)
-    if not kws:
-        return None
     for i, ev in enumerate(evidence):
-        ev_words = set(re.findall(r"[a-z0-9]+", ev.lower()))
-        if kws <= ev_words:
+        if _chunk_covers(claim, ev):
             return i
     return None
 

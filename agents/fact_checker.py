@@ -4,9 +4,10 @@ import os
 import re
 
 from agents.llm import get_llm, message_text
+from agents.source_scorer import LOW_CREDIBILITY
 from models.task import Claim, Task
 from optimization.budget import TokenBudget
-from optimization.claims import _match_chunk, exact_match_verify, split_claims
+from optimization.claims import _chunk_covers, _match_chunk, exact_match_verify, split_claims
 
 # Re-exported for backward compatibility (tests patch fc_mod.exact_match_verify).
 __all__ = ["verify_task", "exact_match_verify"]
@@ -76,9 +77,34 @@ def _verify_staged(
         if len(task.evidence) == len(texts)
         else [None] * len(texts)
     )
+    cred = task.evidence_credibility or {}
 
-    auto_ok, need_llm = [], []
+    def _best_credibility(claim_text: str) -> float | None:
+        """Best credibility among scored chunks covering the claim's keywords.
+
+        Returns None when no scored chunk covers it — no data means no
+        penalty (legacy/manual tasks without researcher-attached scores keep
+        the old behavior).
+        """
+        best: float | None = None
+        for i, t in enumerate(texts):
+            if not _chunk_covers(claim_text, t):
+                continue
+            s = cred.get(refs[i]) if refs[i] else None
+            if s is not None and (best is None or s > best):
+                best = s
+        return best
+
+    auto_ok, need_llm, weak = [], [], []
     for claim in claims:
+        best = _best_credibility(claim.text)
+        if best is not None and best < LOW_CREDIBILITY:
+            # Weakly sourced: every supporting chunk scores below the bar, so
+            # this claim must not pass on this evidence — not even via the
+            # LLM stage. It goes to failed_claims (narrowed retry or terminal
+            # fail), skipping LLM review entirely to save tokens.
+            weak.append(claim)
+            continue
         idx = _match_chunk(claim.text, texts)
         if idx is not None:
             # Exact match: the matched chunk is the authoritative source —
@@ -120,12 +146,14 @@ def _verify_staged(
     total_ok = len(auto_ok) + len(llm_ok)
     note = (
         f"staged: {total_ok}/{len(claims)} claims verified "
-        f"({len(auto_ok)} exact-match, {len(llm_ok)} LLM-verified, {len(llm_bad)} failed)"
+        f"({len(auto_ok)} exact-match, {len(llm_ok)} LLM-verified, "
+        f"{len(llm_bad)} failed, {len(weak)} weakly-sourced)"
     )
-    # Failed = explicit FAILs + claims the LLM never judged (short/garbled
-    # reply). Identity-based: the lists hold the same objects as `claims`.
+    # Failed = weakly-sourced + explicit FAILs + claims the LLM never judged
+    # (short/garbled reply). Identity-based: the lists hold the same objects
+    # as `claims`.
     judged = set(map(id, llm_ok)) | set(map(id, llm_bad))
-    failed = list(llm_bad) + [c for c in need_llm if id(c) not in judged]
+    failed = list(weak) + list(llm_bad) + [c for c in need_llm if id(c) not in judged]
     # Every claim must be verified — an empty/garbled LLM reply verifies
     # nothing, so it must not pass vacuously.
     task.claims = claims

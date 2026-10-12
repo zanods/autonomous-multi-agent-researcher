@@ -56,6 +56,9 @@ class Task(BaseModel):
     claims: list[Claim] = Field(default_factory=list)
     # Evidence ref -> display title (page title or chunk id), for citations.
     source_titles: dict[str, str] = Field(default_factory=dict)
+    # Evidence ref -> heuristic credibility score in [0, 1] (see
+    # agents/source_scorer.py). Populated by the researcher.
+    evidence_credibility: dict[str, float] = Field(default_factory=dict)
     unverified_claims: list[str] = Field(default_factory=list)
     result: str | None = None
     retries: int = 0
