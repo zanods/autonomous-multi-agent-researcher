@@ -222,3 +222,6 @@ __marimo__/
 # local vector store + sqlite (runtime artifacts)
 chroma_db/
 research.db
+
+# eval run output
+eval/results/
