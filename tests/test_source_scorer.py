@@ -36,20 +36,41 @@ def _task_with_scored_evidence(score: float) -> Task:
 
 
 def test_weakly_sourced_claim_cannot_verify(monkeypatch):
-    """A claim supported only by a sub-threshold source fails even if the
-    LLM would pass it — and the LLM is never even consulted."""
+    """A claim supported only by an UNUSABLE ref ("unknown", unparseable)
+    fails even if the LLM would pass it — and the LLM is never consulted."""
     import agents.fact_checker as fc_mod
 
     class _EagerLLM:
         def invoke(self, prompt):
-            raise AssertionError("LLM must not be consulted for weakly-sourced claims")
+            raise AssertionError("LLM must not be consulted for unusable refs")
 
     monkeypatch.setattr(fc_mod, "get_llm", lambda: _EagerLLM())
-    task = _task_with_scored_evidence(0.30)
+    task = _task_with_scored_evidence(0.15)
     ok, note, failed = fc_mod.verify_task(task, mock_mode=False, optimize=True)
     assert ok is False
     assert "weakly-sourced" in note
     assert len(failed) == 1
+
+
+def test_unknown_domain_source_gets_llm_review(monkeypatch):
+    """Regression (2026-10-13 compsci run): a claim supported by a real URL
+    on an unknown domain (0.30 — e.g. Baeldung, GeeksforGeeks) must NOT
+    auto-fail. The credibility allowlist cannot cover every field; the LLM
+    judges whether the evidence supports the claim."""
+    import agents.fact_checker as fc_mod
+
+    class _PassLLM:
+        def invoke(self, prompt):
+            class R:
+                content = "1. PASS"
+            return R()
+
+    monkeypatch.setattr(fc_mod, "get_llm", lambda: _PassLLM())
+    task = _task_with_scored_evidence(0.30)
+    ok, note, failed = fc_mod.verify_task(task, mock_mode=False, optimize=True)
+    assert ok is True, note
+    assert failed == []
+    assert "0 weakly-sourced" in note
 
 
 def test_high_credibility_source_verifies_normally(monkeypatch):

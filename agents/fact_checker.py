@@ -4,7 +4,7 @@ import os
 import re
 
 from agents.llm import get_llm, message_text
-from agents.source_scorer import LOW_CREDIBILITY
+from agents.source_scorer import SCORE_UNUSABLE
 from models.task import Claim, Task
 from optimization.budget import TokenBudget
 from optimization.claims import (
@@ -106,11 +106,16 @@ def _verify_staged(
     auto_ok, need_llm, weak = [], [], []
     for claim in claims:
         best = _best_credibility(claim.text)
-        if best is not None and best < LOW_CREDIBILITY:
-            # Weakly sourced: every supporting chunk scores below the bar, so
-            # this claim must not pass on this evidence — not even via the
-            # LLM stage. It goes to failed_claims (narrowed retry or terminal
-            # fail), skipping LLM review entirely to save tokens.
+        if best is not None and best <= SCORE_UNUSABLE:
+            # Unusable refs ("unknown", "web", unparseable): no real source
+            # behind the claim — fail without spending LLM tokens.
+            # NOTE: merely *unknown* domains (e.g. Baeldung, GeeksforGeeks)
+            # score 0.30 and must NOT auto-fail here. The credibility
+            # allowlist cannot cover every field; a real URL is a real
+            # source, and the LLM stage judges whether the evidence actually
+            # supports the claim. Auto-failing them caused false negatives
+            # on legitimate sources (2026-10-13 compsci run: every claim
+            # failed despite direct supporting evidence).
             weak.append(claim)
             continue
         idx = None
