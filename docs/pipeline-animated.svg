@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="470" height="960" viewBox="0 0 470 960" role="img"
+     aria-label="Animated pipeline: User Query, Planner, Researcher, Fact-checker, Synthesizer, Markdown report, with retry loop">  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrO" viewBox="0 0 10 10" refX="8" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#fb9230"/>
+    </marker>
+    <path id="route" d="M230,110 L230,868" fill="none" stroke="none"/>
+    <path id="retryPath" d="M390,512 C462,512 462,372 390,372" fill="none" stroke="none"/>
+  </defs>
+
+  <rect x="0" y="0" width="470" height="960" rx="16" fill="#0d1117"/>
+
+  <g font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" text-anchor="middle">
+    <text x="235" y="34" font-size="15" font-weight="700" fill="#e6edf3">Pipeline — Autonomous Multi-Agent Researcher</text>
+    <text x="235" y="55" font-size="12" fill="#8b949e">Blue dots = data flowing through each stage</text>
+  </g>
+
+  <!-- travelling data packets -->
+  <circle r="5" fill="#22d3ee" opacity="0.9">
+    <animateMotion dur="6s" repeatCount="indefinite"><mpath xlink:href="#route" href="#route"/></animateMotion>
+  </circle>
+  <circle r="5" fill="#22d3ee" opacity="0.9">
+    <animateMotion dur="6s" begin="-2s" repeatCount="indefinite"><mpath xlink:href="#route" href="#route"/></animateMotion>
+  </circle>
+  <circle r="5" fill="#22d3ee" opacity="0.9">
+    <animateMotion dur="6s" begin="-4s" repeatCount="indefinite"><mpath xlink:href="#route" href="#route"/></animateMotion>
+  </circle>
+  <circle r="4.5" fill="#fb9230" opacity="0.95">
+    <animateMotion dur="2.4s" repeatCount="indefinite"><mpath xlink:href="#retryPath" href="#retryPath"/></animateMotion>
+  </circle>
+
+  <!-- connectors -->
+  <g fill="none">
+    <line x1="230" y1="180" x2="230" y2="200" stroke="#22d3ee" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arr)">
+      <animate attributeName="stroke-dashoffset" from="0" to="-26" dur="0.9s" repeatCount="indefinite"/>
+    </line>
+    <line x1="230" y1="300" x2="230" y2="320" stroke="#22d3ee" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arr)">
+      <animate attributeName="stroke-dashoffset" from="0" to="-26" dur="0.9s" repeatCount="indefinite"/>
+    </line>
+    <line x1="230" y1="420" x2="230" y2="460" stroke="#22d3ee" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arr)">
+      <animate attributeName="stroke-dashoffset" from="0" to="-26" dur="0.9s" repeatCount="indefinite"/>
+    </line>
+    <line x1="230" y1="560" x2="230" y2="600" stroke="#22d3ee" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arr)">
+      <animate attributeName="stroke-dashoffset" from="0" to="-26" dur="0.9s" repeatCount="indefinite"/>
+    </line>
+    <line x1="230" y1="700" x2="230" y2="740" stroke="#22d3ee" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arr)">
+      <animate attributeName="stroke-dashoffset" from="0" to="-26" dur="0.9s" repeatCount="indefinite"/>
+    </line>
+    <!-- retry loop -->
+    <use href="#retryPath" xlink:href="#retryPath" stroke="#fb9230" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#arrO)">
+      <animate attributeName="stroke-dashoffset" from="0" to="-26" dur="0.7s" repeatCount="indefinite"/>
+    </use>
+  </g>
+  <text font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="600" fill="#fb9230">
+    <textPath xlink:href="#retryPath" href="#retryPath" startOffset="50%" text-anchor="middle">retry max 2 · narrow claims</textPath>
+  </text>
+
+  <!-- stages -->
+  <g font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" text-anchor="middle">
+    <!-- 1 -->
+    <g>
+      <rect x="70" y="86" width="320" height="92" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1.5">
+        <animate attributeName="stroke" values="#30363d;#22d3ee;#30363d" keyTimes="0;0.06;0.14" dur="7.2s" begin="0s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-width" values="1.5;2.5;1.5" keyTimes="0;0.06;0.14" dur="7.2s" begin="0s" repeatCount="indefinite"/>
+      </rect>
+      <circle cx="42" cy="132" r="16" fill="#21262d" stroke="#30363d"/>
+      <text x="42" y="137" font-size="13" font-weight="700" fill="#8b949e">1</text>
+      <text x="230" y="120" font-size="15" font-weight="700" fill="#e6edf3">User Query</text>
+      <text x="230" y="144" font-size="12" fill="#8b949e">research question</text>
+    </g>
+    <!-- 2 -->
+    <g>
+      <rect x="70" y="206" width="320" height="92" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1.5">
+        <animate attributeName="stroke" values="#30363d;#22d3ee;#30363d" keyTimes="0;0.06;0.14" dur="7.2s" begin="1.2s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-width" values="1.5;2.5;1.5" keyTimes="0;0.06;0.14" dur="7.2s" begin="1.2s" repeatCount="indefinite"/>
+      </rect>
+      <circle cx="42" cy="252" r="16" fill="#21262d" stroke="#30363d"/>
+      <text x="42" y="257" font-size="13" font-weight="700" fill="#8b949e">2</text>
+      <text x="230" y="240" font-size="15" font-weight="700" fill="#e6edf3">Planner</text>
+      <text x="230" y="264" font-size="12" fill="#8b949e">splits into sub-tasks</text>
+    </g>
+    <!-- 3 -->
+    <g>
+      <rect x="70" y="326" width="320" height="92" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1.5">
+        <animate attributeName="stroke" values="#30363d;#22d3ee;#30363d" keyTimes="0;0.06;0.14" dur="7.2s" begin="2.4s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-width" values="1.5;2.5;1.5" keyTimes="0;0.06;0.14" dur="7.2s" begin="2.4s" repeatCount="indefinite"/>
+      </rect>
+      <circle cx="42" cy="372" r="16" fill="#21262d" stroke="#30363d"/>
+      <text x="42" y="377" font-size="13" font-weight="700" fill="#8b949e">3</text>
+      <text x="230" y="360" font-size="15" font-weight="700" fill="#e6edf3">Researcher</text>
+      <text x="230" y="382" font-size="12" fill="#8b949e">RAG (chroma_db) + Tavily web → notes &amp; claims</text>
+      <text x="230" y="402" font-size="11" font-weight="600" fill="#fbbf24">! hallucination can originate here</text>
+    </g>
+    <!-- 4 -->
+    <g>
+      <rect x="70" y="466" width="320" height="92" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1.5">
+        <animate attributeName="stroke" values="#30363d;#22d3ee;#30363d" keyTimes="0;0.06;0.14" dur="7.2s" begin="3.6s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-width" values="1.5;2.5;1.5" keyTimes="0;0.06;0.14" dur="7.2s" begin="3.6s" repeatCount="indefinite"/>
+      </rect>
+      <circle cx="42" cy="512" r="16" fill="#21262d" stroke="#30363d"/>
+      <text x="42" y="517" font-size="13" font-weight="700" fill="#8b949e">4</text>
+      <text x="230" y="500" font-size="15" font-weight="700" fill="#e6edf3">Fact-checker</text>
+      <text x="230" y="522" font-size="12" fill="#8b949e">exact-match + LLM verifies each claim vs evidence</text>
+      <text x="230" y="542" font-size="11" font-weight="600" fill="#34d399">✓ pass · ✗ fail → back to Researcher</text>
+    </g>
+    <!-- 5 -->
+    <g>
+      <rect x="70" y="606" width="320" height="92" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1.5">
+        <animate attributeName="stroke" values="#30363d;#22d3ee;#30363d" keyTimes="0;0.06;0.14" dur="7.2s" begin="4.8s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-width" values="1.5;2.5;1.5" keyTimes="0;0.06;0.14" dur="7.2s" begin="4.8s" repeatCount="indefinite"/>
+      </rect>
+      <circle cx="42" cy="652" r="16" fill="#21262d" stroke="#30363d"/>
+      <text x="42" y="657" font-size="13" font-weight="700" fill="#8b949e">5</text>
+      <text x="230" y="640" font-size="15" font-weight="700" fill="#e6edf3">Synthesizer</text>
+      <text x="230" y="662" font-size="12" fill="#8b949e">writes the report</text>
+      <text x="230" y="682" font-size="11" font-weight="600" fill="#22d3ee">verified findings only — no fabrication</text>
+    </g>
+    <!-- 6 -->
+    <g>
+      <rect x="70" y="746" width="320" height="92" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1.5">
+        <animate attributeName="stroke" values="#30363d;#22d3ee;#30363d" keyTimes="0;0.06;0.14" dur="7.2s" begin="6s" repeatCount="indefinite"/>
+        <animate attributeName="stroke-width" values="1.5;2.5;1.5" keyTimes="0;0.06;0.14" dur="7.2s" begin="6s" repeatCount="indefinite"/>
+      </rect>
+      <circle cx="42" cy="792" r="16" fill="#21262d" stroke="#30363d"/>
+      <text x="42" y="797" font-size="13" font-weight="700" fill="#8b949e">6</text>
+      <text x="230" y="780" font-size="15" font-weight="700" fill="#e6edf3">Markdown Report</text>
+      <text x="230" y="804" font-size="12" fill="#8b949e">7 sections + Verification gaps + token budget</text>
+    </g>
+  </g>
+
+  <!-- legend -->
+  <g font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#8b949e">
+    <line x1="60" y1="884" x2="104" y2="884" stroke="#22d3ee" stroke-width="3"/>
+    <text x="114" y="888" text-anchor="start">Data flow</text>
+    <line x1="60" y1="908" x2="104" y2="908" stroke="#fb9230" stroke-width="3" stroke-dasharray="7 6"/>
+    <text x="114" y="912" text-anchor="start">Retry — failed claims go back to Researcher (max 2)</text>
+    <text x="60" y="936" text-anchor="start"><tspan fill="#fbbf24" font-weight="600">!</tspan> hallucination source &#183; <tspan fill="#34d399" font-weight="600">✓/✗</tspan> hallucination catch</text>
+  </g>
+</svg>

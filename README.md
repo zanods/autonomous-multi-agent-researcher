@@ -34,38 +34,11 @@ The system is built around **LangGraph**, **LangChain**, **Advanced RAG**, and *
 
 ## 🏗️ System Architecture
 
-```mermaid
-graph TD
-    A[User Query] --> B[Supervisor / Planner Agent]
-    B --> C{Routing Logic}
-
-    C -->|Internal Knowledge| D[Vector Store / Hybrid Retriever]
-    C -->|Live Web Search| E[Search Tools / MCP API]
-
-    D --> F[Fact-Check & Re-Ranking Node]
-    E --> F
-
-    F --> G[Synthesis & Report Agent]
-    G --> H[Final Structured Output]
-```
+![System Architecture](docs/architecture-animated.svg)
 
 ### Agent Workflow
 
-```text
-User Goal
-   ↓
-Planner
-   ↓
-Task Queue
-   ↓
-Research / Retrieval
-   ↓
-Fact Checking
-   ↓
-Synthesis
-   ↓
-Structured Report
-```
+![Agent Workflow](docs/pipeline-animated.svg)
 
 The implementation is being developed incrementally, starting with the task schema and LangGraph state layer before adding the research agents, API layer, and UI.
 
