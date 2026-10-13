@@ -34,11 +34,11 @@ The system is built around **LangGraph**, **LangChain**, **Advanced RAG**, and *
 
 ## 🏗️ System Architecture
 
-![System Architecture](docs/architecture-animated.svg)
+![System Architecture](docs/architecture-animated.svg?v=2)
 
 ### Agent Workflow
 
-![Agent Workflow](docs/pipeline-animated.svg)
+![Agent Workflow](docs/pipeline-animated.svg?v=2)
 
 The implementation is being developed incrementally, starting with the task schema and LangGraph state layer before adding the research agents, API layer, and UI.
 
