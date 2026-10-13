@@ -34,7 +34,7 @@ The system is built around **LangGraph**, **LangChain**, **Advanced RAG**, and *
 
 ## 🏗️ System Architecture
 
-![System Architecture](docs/architecture-animated.svg?v=2)
+![System Architecture](docs/architecture-animated.svg?v=3)
 
 ### Agent Workflow
 
