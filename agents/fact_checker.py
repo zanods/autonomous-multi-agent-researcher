@@ -139,7 +139,14 @@ def _verify_staged(
 
     llm_ok, llm_bad = [], []
     if need_llm:
-        snippets = "\n".join(f"- {t[:600]}" for t in texts[:3])
+        # Mix KB and web evidence: the researcher orders RAG chunks first, so
+        # a flat texts[:N] cut can starve web hits entirely when RAG returns
+        # junk (e.g. mock embeddings over an unrelated KB). Cap each source
+        # so the judge always sees both.
+        kb_texts = [t for t, r in zip(texts, refs) if r and r.startswith("kb:")]
+        web_texts = [t for t, r in zip(texts, refs) if not (r and r.startswith("kb:"))]
+        picked = kb_texts[:3] + web_texts[:3]
+        snippets = "\n".join(f"- {t[:600]}" for t in picked)
         if budget is not None:
             snippets = budget.spend("fact_checker", snippets)
         prompt = (
