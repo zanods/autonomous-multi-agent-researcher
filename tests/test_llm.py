@@ -5,6 +5,7 @@ def test_no_key_no_llm(monkeypatch):
     for key in (
         "GOOGLE_API_KEY",
         "GROQ_API_KEY",
+        "RIVER_API_KEY",
         "CEREBRAS_API_KEY",
         "OPENROUTER_API_KEY",
         "OPENAI_API_KEY",
@@ -32,6 +33,8 @@ def test_groq_fallback(monkeypatch):
 def test_openrouter_fallback(monkeypatch):
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("RIVER_API_KEY", raising=False)
+    monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "fake")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert llm_mod._active_provider() == "openrouter"
@@ -66,9 +69,11 @@ def test_openai_compatible_providers_set_request_timeout(monkeypatch):
     # that break httpx client construction.
     for var in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"):
         monkeypatch.delenv(var, raising=False)
-    for env_key in ("GROQ_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY"):
+    for env_key in ("GROQ_API_KEY", "RIVER_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY"):
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        monkeypatch.delenv("RIVER_API_KEY", raising=False)
+        monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv(env_key, "fake")
@@ -81,6 +86,7 @@ def test_cerebras_selection_and_timeout(monkeypatch):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("RIVER_API_KEY", raising=False)
     monkeypatch.setenv("CEREBRAS_API_KEY", "fake")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -88,6 +94,22 @@ def test_cerebras_selection_and_timeout(monkeypatch):
     assert llm_mod.has_api_key() is True
     llm = llm_mod.get_llm()
     assert llm.request_timeout == 90
+
+
+def test_river_selection_and_timeout(monkeypatch):
+    for var in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setenv("RIVER_API_KEY", "fake")
+    monkeypatch.delenv("CEREBRAS_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert llm_mod._active_provider() == "river"
+    assert llm_mod.has_api_key() is True
+    llm = llm_mod.get_llm()
+    assert llm.request_timeout == 90
+    assert llm.openai_api_base == "https://api.river.ai/v1"
 
 
 def test_message_text_handles_block_content():

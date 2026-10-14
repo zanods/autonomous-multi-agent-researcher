@@ -24,7 +24,7 @@ def main() -> None:
 
     mock_mode = not args.live
     if args.live and not has_api_key():
-        parser.error("--live needs GOOGLE_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY or OPENAI_API_KEY set (see .env.example)")
+        parser.error("--live needs GOOGLE_API_KEY, GROQ_API_KEY, RIVER_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY or OPENAI_API_KEY set (see .env.example)")
 
     app = build_workflow()
     initial_state = {

@@ -10,6 +10,7 @@ def _client(tmp_path, monkeypatch):
     for key in (
         "GOOGLE_API_KEY",
         "GROQ_API_KEY",
+        "RIVER_API_KEY",
         "CEREBRAS_API_KEY",
         "OPENROUTER_API_KEY",
         "OPENAI_API_KEY",
@@ -69,6 +70,7 @@ def _no_keys(monkeypatch, tmp_path):
     for key in (
         "GOOGLE_API_KEY",
         "GROQ_API_KEY",
+        "RIVER_API_KEY",
         "CEREBRAS_API_KEY",
         "OPENROUTER_API_KEY",
         "OPENAI_API_KEY",

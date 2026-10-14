@@ -8,6 +8,7 @@ from models.task import Task, TaskStatus
 _API_KEYS = (
     "GOOGLE_API_KEY",
     "GROQ_API_KEY",
+    "RIVER_API_KEY",
     "CEREBRAS_API_KEY",
     "OPENROUTER_API_KEY",
     "OPENAI_API_KEY",
